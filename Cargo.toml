@@ -1,0 +1,19 @@
+[package]
+name = "alkali"
+version = "0.1.0-alpha.1"
+authors = ["tom25519 <tom25519@pm.me>"]
+edition = "2021"
+description = "WIP: Idiomatic Rust bindings to the Sodium cryptographic library"
+repository = "https://github.com/tom25519/alkali"
+license = "MIT OR Apache-2.0"
+keywords = ["cryptography", "libsodium", "nacl", "sodium"]
+categories = ["api-bindings", "cryptography"]
+
+[dependencies]
+libc = { version = "0.2.111" , default-features = false }
+libsodium-sys-stable = "1.19.19"
+rand_core = { version = "0.6.3", features = ["std"] }
+thiserror = "1.0.30"
+
+[dev-dependencies]
+rand = "0.8.4"
