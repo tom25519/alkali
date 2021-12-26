@@ -20,12 +20,19 @@
 //! operations, every party has its own secret key, which is used to derive a public-key, which is
 //! shared with all other parties. Parties need to know each others' public keys to communicate.
 //!
+//! There are also hashing algorithms available in the [`hash`] module, and tools for
+//! cryptographically-secure pseudo-random number generation in the [`random`] module.
+//!
 //! I want to...
 //! * Produce a signature for a message, so that anyone can verify I sent it
 //!     * Use [`asymmetric::sign`]
 //! * Produce an authentication tag for a message, so that specific trusted parties, with whom I
 //!   already share a secret key, can verify I sent it
 //!     * Use [`symmetric::auth`]
+//! * Store a user's password so I can verify their identity on next login
+//!     * Use [`hash::pwhash`]
+//! * Derive a key from a low-entropy input (i.e: a password)
+//!     * Use [`hash::pwhash`]
 //! * Establish a secret key with another party over an insecure channel
 //!     * Use [`asymmetric::kx`]
 //! * Generate cryptographically secure pseudo-random data
@@ -48,9 +55,11 @@ use libsodium_sys as sodium;
 use thiserror::Error;
 
 pub mod asymmetric;
+pub mod hash;
 mod mem;
 pub mod random;
 pub mod symmetric;
+pub mod util;
 
 /// General error type used in alkali.
 ///
@@ -73,12 +82,10 @@ pub enum AlkaliError {
     MemoryManagement,
 
     /// Tried to create a hardened buffer from an incorrectly sized slice.
+    ///
+    /// The 0th item is the expected length, the 1st item is the actual length of the slice.
     #[error("incorrect slice length: expected {0}, found {1}")]
     IncorrectSliceLength(usize, usize),
-
-    /// An error occurred in the [`random`] module.
-    #[error("PRNG error")]
-    RandomError(#[from] random::RandomError),
 
     /// An error occurred in the [`asymmetric::kx`] module.
     #[error("key exchange error")]
@@ -87,6 +94,13 @@ pub enum AlkaliError {
     /// An error occurred in the [`asymmetric::sign`] module.
     #[error("signing error")]
     SignError(#[from] asymmetric::sign::SignError),
+
+    #[error("PBKDF error")]
+    PasswordHashError(#[from] hash::pwhash::PasswordHashError),
+
+    /// An error occurred in the [`random`] module.
+    #[error("PRNG error")]
+    RandomError(#[from] random::RandomError),
 
     /// An error occurred in the [`symmetric::auth`] module.
     #[error("authentication error")]

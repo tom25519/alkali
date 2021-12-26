@@ -73,7 +73,7 @@ use crate::{hardened_buffer, require_init, AlkaliError};
 use libsodium_sys as sodium;
 use thiserror::Error;
 
-/// Error type returned if something went wrong in the auth module.
+/// Error type returned if something went wrong in the kx module.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum KeyExchangeError {
     /// A public key used in the key exchange is weak (likely of low order), and should not be used

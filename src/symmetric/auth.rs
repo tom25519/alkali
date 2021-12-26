@@ -77,6 +77,7 @@
 
 use thiserror::Error;
 
+/// Error type returned if something went wrong in the auth module.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum AuthError {
     /// Failed to authenticate a message.
