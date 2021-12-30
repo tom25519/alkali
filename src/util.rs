@@ -1,7 +1,7 @@
 //! General utilities from Sodium.
 
-use crate::{require_init, AlkaliError};
-use libsodium_sys as sodium;
+use crate::{mem, require_init, AlkaliError};
+use std::ptr::NonNull;
 
 /// Constant time test for equality of two slices.
 ///
@@ -16,19 +16,10 @@ pub fn eq(a: &[u8], b: &[u8]) -> Result<bool, AlkaliError> {
         return Ok(false);
     }
 
-    let comparison_result = unsafe {
-        // SAFETY: This function expects two pointers to regions of memory of the same length,
-        // specified by the third parameter. We check above to ensure that a and b are of the same
-        // length. We use a.len() to specify the length, so it is correct for these slices. This
-        // function will not modify the contents of either slice.
-        sodium::sodium_memcmp(
-            a.as_ptr() as *const libc::c_void,
-            b.as_ptr() as *const libc::c_void,
-            a.len(),
-        )
-    };
+    let a_ptr = NonNull::new(a.as_ptr() as *mut u8).unwrap();
+    let b_ptr = NonNull::new(b.as_ptr() as *mut u8).unwrap();
 
-    Ok(comparison_result == 0)
+    unsafe { mem::memcmp(a_ptr, b_ptr) }
 }
 
 #[cfg(test)]
