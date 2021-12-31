@@ -1,12 +1,12 @@
 //! The [Argon2i](https://en.wikipedia.org/wiki/Argon2) password-based key derivation algorithm.
 //!
 //! This algorithm is intended to be highly resistant to side-channel attacks, but may be less
-//! resistant to GPU-based attacks than [`argon2id`].
+//! resistant to GPU-based attacks than [`super::argon2id`].
 
-use super::pwhash_module;
+use super::pbkdf_module;
 use libsodium_sys as sodium;
 
-pwhash_module! {
+pbkdf_module! {
     sodium::crypto_pwhash_argon2i_OPSLIMIT_MIN,
     sodium::crypto_pwhash_argon2i_OPSLIMIT_INTERACTIVE,
     sodium::crypto_pwhash_argon2i_OPSLIMIT_MODERATE,

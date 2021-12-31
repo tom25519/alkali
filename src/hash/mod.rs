@@ -9,4 +9,4 @@
 //! that `hash(m) = hash(n)`). These three properties, in combination, give rise to a number of use
 //! cases for hash algorithms.
 
-pub mod pwhash;
+pub mod pbkdf;

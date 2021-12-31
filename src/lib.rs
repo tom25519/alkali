@@ -30,9 +30,9 @@
 //!   already share a secret key, can verify I sent it
 //!     * Use [`symmetric::auth`]
 //! * Store a user's password so I can verify their identity on next login
-//!     * Use [`hash::pwhash`]
+//!     * Use [`hash::pbkdf`]
 //! * Derive a key from a low-entropy input (i.e: a password)
-//!     * Use [`hash::pwhash`]
+//!     * Use [`hash::pbkdf`]
 //! * Establish a secret key with another party over an insecure channel
 //!     * Use [`asymmetric::kx`]
 //! * Generate cryptographically secure pseudo-random data
@@ -96,7 +96,7 @@ pub enum AlkaliError {
     SignError(#[from] asymmetric::sign::SignError),
 
     #[error("PBKDF error")]
-    PasswordHashError(#[from] hash::pwhash::PasswordHashError),
+    PasswordHashError(#[from] hash::pbkdf::PasswordHashError),
 
     /// An error occurred in the [`random`] module.
     #[error("PRNG error")]

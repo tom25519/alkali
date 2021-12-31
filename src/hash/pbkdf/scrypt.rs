@@ -3,10 +3,10 @@
 //! Please note that the `scrypt` API is missing the `MEM_LIMIT_MODERATE` and `OPS_LIMIT_MODERATE`
 //! constants included in [`super::argon2id`] and [`super::argon2i`].
 
-use super::pwhash_module;
+use super::pbkdf_module;
 use libsodium_sys as sodium;
 
-pwhash_module! {
+pbkdf_module! {
     sodium::crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_MIN,
     sodium::crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE,
     sodium::crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_SENSITIVE,
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn needs_rehash() -> Result<(), AlkaliError> {
-        use crate::hash::pwhash::RehashResult;
+        use crate::hash::pbkdf::RehashResult;
 
         const OPS_LIMIT: usize = super::OPS_LIMIT_INTERACTIVE;
         const MEM_LIMIT: usize = super::MEM_LIMIT_INTERACTIVE;

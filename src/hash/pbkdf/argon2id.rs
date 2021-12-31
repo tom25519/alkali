@@ -3,10 +3,10 @@
 //! This algorithm is intended to strike a sensible balance between resistance to GPU-based attacks
 //! and resisting side-channel analysis.
 
-use super::pwhash_module;
+use super::pbkdf_module;
 use libsodium_sys as sodium;
 
-pwhash_module! {
+pbkdf_module! {
     sodium::crypto_pwhash_argon2id_OPSLIMIT_MIN,
     sodium::crypto_pwhash_argon2id_OPSLIMIT_INTERACTIVE,
     sodium::crypto_pwhash_argon2id_OPSLIMIT_MODERATE,

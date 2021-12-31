@@ -1,4 +1,4 @@
-//! Password-based key derivation (password hashing).
+//! Password hashing (Password-based Key Derivation Function)
 //!
 //! This module corresponds to the [`crypto_pwhash`
 //! API](https://doc.libsodium.org/password_hashing) from Sodium.
@@ -20,7 +20,7 @@
 //! [`derive_key`] API is intended for this use.
 //!
 //! # Algorithm Details
-//! The term for this cryptographic primitve is a [password-based key derivation
+//! The term for this cryptographic primitive is a [password-based key derivation
 //! function](https://en.wikipedia.org/wiki/Key_derivation_function). The default algorithm is
 //! [Argon2id](argon2id). Argon2id strikes a balance between resisting GPU-based attacks, and
 //! resisting side-channel attacks. [Argon2i](argon2i), which is just intended to be highly
@@ -118,7 +118,7 @@
 //! obviously in a real-world application, there would be considerably more boilerplate.
 //!
 //! ```rust
-//! use alkali::hash::pwhash::{
+//! use alkali::hash::pbkdf::{
 //!     hash_str, verify_str, PasswordHashError, OPS_LIMIT_INTERACTIVE, MEM_LIMIT_INTERACTIVE,
 //! };
 //! use alkali::AlkaliError;
@@ -152,7 +152,7 @@
 //! Key derivation (using [`derive_key`]):
 //!
 //! ```rust
-//! use alkali::hash::pwhash::{
+//! use alkali::hash::pbkdf::{
 //!     derive_key, generate_salt, OPS_LIMIT_INTERACTIVE, MEM_LIMIT_INTERACTIVE,
 //! };
 //!
@@ -175,7 +175,7 @@ pub mod scrypt;
 
 pub use argon2id::*;
 
-/// Error type returned if something went wrong in the pwhash module.
+/// Error type returned if something went wrong in the pbkdf module.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum PasswordHashError {
     /// The password provided was too short or too long for use with this algorithm.
@@ -203,7 +203,7 @@ pub enum PasswordHashError {
 
     /// The password hash failed.
     ///
-    /// This is likely due to memory allocation failing, as the pwhash API is one of the few
+    /// This is likely due to memory allocation failing, as the pbkdf API is one of the few
     /// portions of Sodium which requires dynamic memory allocation.
     #[error("password hash failed")]
     PasswordHashFailed,
@@ -235,8 +235,8 @@ pub enum RehashResult {
     InvalidHash,
 }
 
-/// Implements the parts of a pwhash module common to both the Argon2 and scrypt APIs.
-macro_rules! pwhash_module_common {
+/// Implements the parts of a pbkdf module common to both the Argon2 and scrypt APIs.
+macro_rules! pbkdf_module_common {
     (
         $opslim_min:expr,       // crypto_pwhash_OPSLIMIT_MIN
         $opslim_int:expr,       // crypto_pwhash_OPSLIMIT_INTERACTIVE
@@ -339,7 +339,7 @@ macro_rules! pwhash_module_common {
         /// calculated. The second and third arguments are the operations and memory limits, which
         /// determine the computational complexity of the hash. These values should be chosen
         /// specifically for your application, see [Choosing Memory and Operations
-        /// Limits](crate::hash::pwhash#choosing-memory-and-operations-limits).
+        /// Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
         /// If hashing is successful, a String will be returned containing the hash and the
         /// parameters used to calculate it (including a randomly-generated salt). This hash can
@@ -348,7 +348,7 @@ macro_rules! pwhash_module_common {
         /// # Security Concerns
         /// It is important to set the operations limit and memory limit to suitable values for your
         /// application. See [the section on this
-        /// subject](crate::hash::pwhash#choosing-memory-and-operations-limits).
+        /// subject](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
         /// This function is not suitable for deriving keys for use with other cryptographic
         /// operations, and large parts of its output are predictable. You should instead use
@@ -363,11 +363,11 @@ macro_rules! pwhash_module_common {
             let mut out = [5u8; STR_LENGTH_MAX + 1];
 
             if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::PasswordLengthInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
             } else if ops_limit < OPS_LIMIT_MIN || ops_limit > OPS_LIMIT_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::OpsLimitInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::OpsLimitInvalid.into());
             } else if mem_limit < MEM_LIMIT_MIN || mem_limit > *MEM_LIMIT_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::MemLimitInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::MemLimitInvalid.into());
             }
 
             let pwhash_result = unsafe {
@@ -406,7 +406,7 @@ macro_rules! pwhash_module_common {
                     .unwrap();
                 Ok(output_string)
             } else {
-                Err($crate::hash::pwhash::PasswordHashError::PasswordHashFailed.into())
+                Err($crate::hash::pbkdf::PasswordHashError::PasswordHashFailed.into())
             }
         }
 
@@ -451,7 +451,7 @@ macro_rules! pwhash_module_common {
             if verification_result == 0 {
                 Ok(())
             } else {
-                Err($crate::hash::pwhash::PasswordHashError::PasswordIncorrect.into())
+                Err($crate::hash::pbkdf::PasswordHashError::PasswordIncorrect.into())
             }
         }
 
@@ -471,8 +471,8 @@ macro_rules! pwhash_module_common {
             hash: &str,
             ops_limit: usize,
             mem_limit: usize,
-        ) -> Result<$crate::hash::pwhash::RehashResult, $crate::AlkaliError> {
-            use $crate::hash::pwhash::RehashResult;
+        ) -> Result<$crate::hash::pbkdf::RehashResult, $crate::AlkaliError> {
+            use $crate::hash::pbkdf::RehashResult;
 
             $crate::require_init()?;
 
@@ -505,10 +505,10 @@ macro_rules! pwhash_module_common {
     };
 }
 
-pub(crate) use pwhash_module_common;
+pub(crate) use pbkdf_module_common;
 
-/// Generates the API for a `pwhash` module based with the given functions & constants from Sodium.
-macro_rules! pwhash_module {
+/// Generates the API for a `pbkdf` module based with the given functions & constants from Sodium.
+macro_rules! pbkdf_module {
     (
         $opslim_min:expr,       // crypto_pwhash_OPSLIMIT_MIN
         $opslim_int:expr,       // crypto_pwhash_OPSLIMIT_INTERACTIVE
@@ -532,7 +532,7 @@ macro_rules! pwhash_module {
         $pwhash_verify:path,    // crypto_pwhash_str_verify
         $str_needs_rehash:path, // crypto_pwhash_str_needs_rehash
     ) => {
-        $crate::hash::pwhash::pwhash_module_common! {
+        $crate::hash::pbkdf::pbkdf_module_common! {
             $opslim_min,
             $opslim_int,
             $opslim_sen,
@@ -573,7 +573,7 @@ macro_rules! pwhash_module {
         /// is first derived using [`generate_salt`]. The third and fourth arguments are the
         /// operations and memory limits, which determine the computational complexity of the hash.
         /// These values should be chosen specifically for your application, see [Choosing Memory
-        /// and Operations Limits](crate::hash::pwhash#choosing-memory-and-operations-limits). The
+        /// and Operations Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits). The
         /// final argument is the buffer to which the derived key will be written. This can be of
         /// any length between [`OUTPUT_LENGTH_MIN`] and
         /// [`OUTPUT_LENGTH_MAX`](struct@OUTPUT_LENGTH_MAX) bytes.
@@ -590,7 +590,7 @@ macro_rules! pwhash_module {
         /// # Security Concerns
         /// It is important to set the operations limit and memory limit to suitable values for your
         /// application. See [the section on this
-        /// subject](crate::hash::pwhash#choosing-memory-and-operations-limits).
+        /// subject](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
         /// To store a password to verify a user's identity, it's a better idea to use
         /// [`hash_str`], which includes the hash parameters in the generated string, and produces
@@ -606,13 +606,13 @@ macro_rules! pwhash_module {
             $crate::require_init()?;
 
             if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::PasswordLengthInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
             } else if ops_limit < OPS_LIMIT_MIN || ops_limit > OPS_LIMIT_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::OpsLimitInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::OpsLimitInvalid.into());
             } else if mem_limit < MEM_LIMIT_MIN || mem_limit > *MEM_LIMIT_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::MemLimitInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::MemLimitInvalid.into());
             } else if key.len() < OUTPUT_LENGTH_MIN || key.len() > *OUTPUT_LENGTH_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::OutputLengthInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::OutputLengthInvalid.into());
             }
 
             let pwhash_result = unsafe {
@@ -642,7 +642,7 @@ macro_rules! pwhash_module {
             if pwhash_result == 0 {
                 Ok(())
             } else {
-                Err($crate::hash::pwhash::PasswordHashError::PasswordHashFailed.into())
+                Err($crate::hash::pbkdf::PasswordHashError::PasswordHashFailed.into())
             }
         }
     };
@@ -667,7 +667,7 @@ macro_rules! pwhash_module {
         $pwhash_verify:path,    // crypto_pwhash_str_verify
         $str_needs_rehash:path, // crypto_pwhash_str_needs_rehash
     ) => {
-        $crate::hash::pwhash::pwhash_module_common! {
+        $crate::hash::pbkdf::pbkdf_module_common! {
             $opslim_min,
             $opslim_int,
             $opslim_sen,
@@ -700,7 +700,7 @@ macro_rules! pwhash_module {
         /// is first derived using [`generate_salt`]. The third and fourth arguments are the
         /// operations and memory limits, which determine the computational complexity of the hash.
         /// These values should be chosen specifically for your application, see [Choosing Memory
-        /// and Operations Limits](crate::hash::pwhash#choosing-memory-and-operations-limits). The
+        /// and Operations Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits). The
         /// final argument is the buffer to which the derived key will be written. This can be of
         /// any length between [`OUTPUT_LENGTH_MIN`] and
         /// [`OUTPUT_LENGTH_MAX`](struct@OUTPUT_LENGTH_MAX) bytes.
@@ -717,7 +717,7 @@ macro_rules! pwhash_module {
         /// # Security Concerns
         /// It is important to set the operations limit and memory limit to suitable values for your
         /// application. See [the section on this
-        /// subject](crate::hash::pwhash#choosing-memory-and-operations-limits).
+        /// subject](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
         /// To store a password to verify a user's identity, it's a better idea to use
         /// [`hash_str`], which includes the hash parameters in the generated string, and produces
@@ -733,13 +733,13 @@ macro_rules! pwhash_module {
             $crate::require_init()?;
 
             if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::PasswordLengthInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
             } else if ops_limit < OPS_LIMIT_MIN || ops_limit > OPS_LIMIT_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::OpsLimitInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::OpsLimitInvalid.into());
             } else if mem_limit < MEM_LIMIT_MIN || mem_limit > *MEM_LIMIT_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::MemLimitInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::MemLimitInvalid.into());
             } else if key.len() < OUTPUT_LENGTH_MIN || key.len() > *OUTPUT_LENGTH_MAX {
-                return Err($crate::hash::pwhash::PasswordHashError::OutputLengthInvalid.into());
+                return Err($crate::hash::pbkdf::PasswordHashError::OutputLengthInvalid.into());
             }
 
             let pwhash_result = unsafe {
@@ -768,15 +768,15 @@ macro_rules! pwhash_module {
             if pwhash_result == 0 {
                 Ok(())
             } else {
-                Err($crate::hash::pwhash::PasswordHashError::PasswordHashFailed.into())
+                Err($crate::hash::pbkdf::PasswordHashError::PasswordHashFailed.into())
             }
         }
     };
 }
 
-pub(crate) use pwhash_module;
+pub(crate) use pbkdf_module;
 
-/// Generates tests for the [`derive_key`] function of a `pwhash` implementation. Takes test
+/// Generates tests for the [`derive_key`] function of a `pbkdf` implementation. Takes test
 /// vectors as arguments.
 #[allow(unused_macros)]
 macro_rules! kdf_tests {
@@ -849,7 +849,7 @@ macro_rules! kdf_tests {
 #[allow(unused_imports)]
 pub(crate) use kdf_tests;
 
-/// Generates some tests for the [`verify_str`] function of a `pwhash` implementation. Takes test
+/// Generates some tests for the [`verify_str`] function of a `pbkdf` implementation. Takes test
 /// vectors as arguments.
 #[allow(unused_macros)]
 macro_rules! verify_str_valid_tests {
@@ -869,7 +869,7 @@ macro_rules! verify_str_valid_tests {
 #[allow(unused_imports)]
 pub(crate) use verify_str_valid_tests;
 
-/// Generates some tests for the [`verify_str`] function of a `pwhash` implementation. Takes test
+/// Generates some tests for the [`verify_str`] function of a `pbkdf` implementation. Takes test
 /// vectors as arguments.
 #[allow(unused_macros)]
 macro_rules! verify_str_invalid_tests {
@@ -889,13 +889,13 @@ macro_rules! verify_str_invalid_tests {
 #[allow(unused_imports)]
 pub(crate) use verify_str_invalid_tests;
 
-/// Generates tests for the [`requires_rehash`] function of a `pwhash` implementation.
+/// Generates tests for the [`requires_rehash`] function of a `pbkdf` implementation.
 #[allow(unused_macros)]
 macro_rules! needs_rehash_tests {
     () => {
         #[test]
         fn needs_rehash() -> Result<(), $crate::AlkaliError> {
-            use $crate::hash::pwhash::RehashResult;
+            use $crate::hash::pbkdf::RehashResult;
 
             const OPS_LIMIT: usize = 3;
             const MEM_LIMIT: usize = 5000000;

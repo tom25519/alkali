@@ -7,7 +7,7 @@ APIs to implement:
 * [ ] `crypto_kdf`
 * [x] `crypto_kx`
 * [ ] `crypto_onetimeauth`
-* [ ] `crypto_pwhash`
+* [x] `crypto_pwhash`
 * [ ] `crypto_secretbox`
 * [ ] `crypto_secretstream`
 * [ ] `crypto_shorthash`
@@ -16,6 +16,6 @@ APIs to implement:
 * [x] `randombytes`
 * [ ] hex/base64 conversion
 * [ ] `sodium_memzero`
-* [ ] `sodium_memcmp`
+* [x] `sodium_memcmp`
 * [ ] `sodium_is_zero`
 * [ ] padding
