@@ -95,6 +95,10 @@ pub enum AlkaliError {
     #[error("signing error")]
     SignError(#[from] asymmetric::sign::SignError),
 
+    #[error("hash error")]
+    GenericHashError(#[from] hash::generic::GenericHashError),
+
+    /// An error occurred in the [`hash::pbkdf`] module.
     #[error("PBKDF error")]
     PasswordHashError(#[from] hash::pbkdf::PasswordHashError),
 
