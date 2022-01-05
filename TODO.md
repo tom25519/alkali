@@ -10,7 +10,7 @@ APIs to implement:
 * [x] `crypto_pwhash`
 * [ ] `crypto_secretbox`
 * [ ] `crypto_secretstream`
-* [ ] `crypto_shorthash`
+* [x] `crypto_shorthash`
 * [x] `crypto_sign`
 * [ ] `crypto_stream`
 * [x] `randombytes`

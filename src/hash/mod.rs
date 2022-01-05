@@ -11,3 +11,4 @@
 
 pub mod generic;
 pub mod pbkdf;
+pub mod short;

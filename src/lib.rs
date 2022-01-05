@@ -33,8 +33,12 @@
 //!     * Use [`hash::pbkdf`]
 //! * Derive a key from a low-entropy input (i.e: a password)
 //!     * Use [`hash::pbkdf`]
+//! * Calculate the  "fingerprint" of a file or message
+//!     * Use [`hash::generic`]
 //! * Establish a secret key with another party over an insecure channel
 //!     * Use [`asymmetric::kx`]
+//! * Calculate a hash for use in a hash table/bloom filter
+//!     * Use [`hash::short`]
 //! * Generate cryptographically secure pseudo-random data
 //!     * Use [`random`]
 //!
