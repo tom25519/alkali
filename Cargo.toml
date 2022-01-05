@@ -1,6 +1,6 @@
 [package]
 name = "alkali"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 authors = ["tom25519 <tom25519@pm.me>"]
 edition = "2021"
 description = "WIP: Idiomatic Rust bindings to the Sodium cryptographic library"
