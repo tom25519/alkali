@@ -27,6 +27,65 @@
 //! computationally intensive. Instead, use a [Password-Based Key Derivation
 //! Function](https://en.wikipedia.org/wiki/Key_derivation_function#Password_hashing) (PBKDF) such
 //! as those available in the [`hash::pbkdf`](crate::hash::pbkdf) module.
+//!
+//! # Examples
+//! Single-part hashing (using [`hash`]):
+//!
+//! ```rust
+//! use alkali::hash::generic;
+//!
+//! let message = b"Here's some message we wish to hash :)";
+//! let hash = generic::hash(message).unwrap();
+//! assert_eq!(
+//!     hash,
+//!     [
+//!         0xaa, 0x42, 0xa0, 0xb0, 0xdc, 0x4a, 0x34, 0xf6, 0xb5, 0x4a, 0xa0, 0x33, 0x7b, 0xcb,
+//!         0x90, 0x2c, 0xf1, 0x82, 0xfe, 0xb6, 0x6a, 0xe8, 0x9f, 0x05, 0xb3, 0x05, 0xfb, 0xac,
+//!         0x9d, 0xad, 0x0d, 0x3b,
+//!     ]
+//! );
+//! ```
+//!
+//! Keyed hashing (using [`hash_keyed`]):
+//!
+//! ```rust
+//! use alkali::hash::generic;
+//!
+//! let message = b"We also wish to hash this message ;)";
+//!
+//! // Generate a random key for the hash
+//! let key_a = generic::Key::generate().unwrap();
+//! let hash_a = generic::hash_keyed(message, &key_a).unwrap();
+//!
+//! // We'll now hash the same message with a different key
+//! let key_b = generic::Key::generate().unwrap();
+//! let hash_b = generic::hash_keyed(message, &key_b).unwrap();
+//!
+//! // Hashing the same message with a different key should produce a different hash
+//! assert_ne!(hash_a, hash_b);
+//! ```
+//!
+//! Multi-part hashing (using [`Multipart`]):
+//!
+//! ```rust
+//! use alkali::hash::generic;
+//!
+//! let mut output_a = [0u8; generic::DIGEST_LENGTH_DEFAULT];
+//! let mut state_a = generic::Multipart::new(&mut output_a).unwrap();
+//! state_a.update(b"Here's the first part");
+//! state_a.update(b"... And the second!");
+//! state_a.calculate_hash();
+//!
+//! let mut output_b = [255u8; generic::DIGEST_LENGTH_DEFAULT];
+//! let mut state_b = generic::Multipart::new(&mut output_b).unwrap();
+//! state_b.update(b"Here");
+//! state_b.update(b"'s the first ");
+//! state_b.update(b"part... And the ");
+//! state_b.update(b"second!");
+//! state_b.calculate_hash();
+//!
+//! assert_eq!(output_a, output_b);
+//! ```
 
 // TODO: Consider how/if we wish to expose the salt/personalisation parameters of the hash.
 
