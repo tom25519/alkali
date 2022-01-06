@@ -12,4 +12,5 @@
 pub mod generic;
 pub mod kdf;
 pub mod pbkdf;
+pub mod sha2;
 pub mod short;
