@@ -69,7 +69,7 @@ macro_rules! short_module {
             Key(KEY_LENGTH);
         }
 
-        impl<'a> Key<'a> {
+        impl Key {
             /// Generate a new, random key for use with this hash.
             pub fn generate() -> Result<Self, $crate::AlkaliError> {
                 let mut key = Self::new_empty()?;

@@ -169,7 +169,7 @@ hardened_buffer! {
     Key(KEY_LENGTH_DEFAULT);
 }
 
-impl<'a> Key<'a> {
+impl Key {
     /// Generate a new, random key for use with the keyed variant of the hash function.
     pub fn generate() -> Result<Self, AlkaliError> {
         require_init()?;

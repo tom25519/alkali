@@ -125,7 +125,7 @@ macro_rules! auth_module {
             Key($key_len as usize)
         }
 
-        impl<'a> Key<'a> {
+        impl Key {
             /// Generate a new, random key for use in symmetric message authentication.
             pub fn generate() -> Result<Self, $crate::AlkaliError> {
                 $crate::require_init()?;

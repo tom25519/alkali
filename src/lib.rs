@@ -127,13 +127,12 @@ macro_rules! hardened_buffer {
     ( $( $(#[$metadata:meta])* $name:ident($size:expr)$(;)? )* ) => {
         $(
             $(#[$metadata])*
-            pub struct $name<'a> {
+            pub struct $name {
                 ptr: std::ptr::NonNull<[u8; $size]>,
-                _marker_lifetime: std::marker::PhantomData<&'a [u8]>,
-                _marker_ownership: std::marker::PhantomData<[u8; $size]>,
+                _marker: std::marker::PhantomData<[u8; $size]>,
             }
 
-            impl<'a> $name<'a> {
+            impl $name {
                 pub const LENGTH: usize = $size as usize;
 
                 /// Create a new instance of this type, filled with all zeroes.
@@ -155,8 +154,7 @@ macro_rules! hardened_buffer {
                         $crate::mem::memzero(ptr)?;
                         Ok(Self {
                             ptr,
-                            _marker_lifetime: std::marker::PhantomData,
-                            _marker_ownership: std::marker::PhantomData,
+                            _marker: std::marker::PhantomData,
                         })
                     }
                 }
@@ -209,7 +207,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> Drop for $name<'a> {
+            impl Drop for $name {
                 fn drop(&mut self) {
                     unsafe {
                         // SAFETY:
@@ -237,7 +235,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::convert::TryFrom<&[u8]> for $name<'a> {
+            impl std::convert::TryFrom<&[u8]> for $name {
                 type Error = $crate::AlkaliError;
 
                 fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
@@ -251,7 +249,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> TryFrom<&[u8; $size]> for $name<'a> {
+            impl TryFrom<&[u8; $size]> for $name {
                 type Error = $crate::AlkaliError;
 
                 fn try_from(buf: &[u8; $size]) -> Result<Self, Self::Error> {
@@ -261,8 +259,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::convert::AsMut<[u8; $size]> for $name<'a> {
-                fn as_mut(&mut self) -> &'a mut [u8; $size] {
+            impl std::convert::AsMut<[u8; $size]> for $name {
+                fn as_mut(&mut self) -> &mut [u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
@@ -275,8 +273,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::convert::AsRef<[u8; $size]> for $name<'a> {
-                fn as_ref(&self) -> &'a [u8; $size] {
+            impl std::convert::AsRef<[u8; $size]> for $name {
+                fn as_ref(&self) -> &[u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
@@ -289,8 +287,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::borrow::Borrow<[u8; $size]> for $name<'a> {
-                fn borrow(&self) -> &'a [u8; $size] {
+            impl std::borrow::Borrow<[u8; $size]> for $name {
+                fn borrow(&self) -> &[u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
@@ -303,8 +301,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::borrow::BorrowMut<[u8; $size]> for $name<'a> {
-                fn borrow_mut(&mut self) -> &'a mut [u8; $size] {
+            impl std::borrow::BorrowMut<[u8; $size]> for $name {
+                fn borrow_mut(&mut self) -> &mut [u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
@@ -317,16 +315,16 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::fmt::Debug for $name<'a> {
+            impl std::fmt::Debug for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str(&format!("{}([u8; {}])", stringify!($name), $size))
                 }
             }
 
-            impl<'a> std::ops::Deref for $name<'a> {
+            impl std::ops::Deref for $name {
                 type Target = [u8; $size];
 
-                fn deref(&self) -> &'a Self::Target {
+                fn deref(&self) -> &Self::Target {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
@@ -339,8 +337,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::ops::DerefMut for $name<'a> {
-                fn deref_mut(&mut self) -> &'a mut Self::Target {
+            impl std::ops::DerefMut for $name {
+                fn deref_mut(&mut self) -> &mut Self::Target {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
@@ -353,7 +351,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::cmp::PartialEq<Self> for $name<'a> {
+            impl std::cmp::PartialEq<Self> for $name {
                 fn eq(&self, other: &Self) -> bool {
                     unsafe {
                         // SAFETY: To initialise a struct of this type, we must successfully
@@ -369,7 +367,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl<'a> std::fmt::Pointer for $name<'a> {
+            impl std::fmt::Pointer for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
                     <std::ptr::NonNull<[u8; $size]> as std::fmt::Pointer>::fmt(&self.ptr, f)
                 }
