@@ -39,6 +39,8 @@
 //!     * Use [`asymmetric::kx`]
 //! * Calculate a hash for use in a hash table/bloom filter
 //!     * Use [`hash::short`]
+//! * Derive multiple subkeys from a single high-entropy key
+//!     * Use [`hash::kdf`]
 //! * Generate cryptographically secure pseudo-random data
 //!     * Use [`random`]
 //!
@@ -99,8 +101,13 @@ pub enum AlkaliError {
     #[error("signing error")]
     SignError(#[from] asymmetric::sign::SignError),
 
+    /// An error occurred in the [`hash::generic`] module.
     #[error("hash error")]
     GenericHashError(#[from] hash::generic::GenericHashError),
+
+    /// An error occurred in the [`hash::kdf`] module.
+    #[error("KDF error")]
+    KDFError(#[from] hash::kdf::KDFError),
 
     /// An error occurred in the [`hash::pbkdf`] module.
     #[error("PBKDF error")]

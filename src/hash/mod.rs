@@ -10,5 +10,6 @@
 //! cases for hash algorithms.
 
 pub mod generic;
+pub mod kdf;
 pub mod pbkdf;
 pub mod short;
