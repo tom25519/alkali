@@ -4,7 +4,7 @@ APIs to implement:
 * [ ] `crypto_box`
 * [x] `crypto_generichash`
 * [ ] `crypto_hash`
-* [ ] `crypto_kdf`
+* [x] `crypto_kdf`
 * [x] `crypto_kx`
 * [ ] `crypto_onetimeauth`
 * [x] `crypto_pwhash`
