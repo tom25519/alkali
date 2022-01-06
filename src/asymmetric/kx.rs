@@ -131,7 +131,7 @@ hardened_buffer! {
     Seed(KEY_SEED_LENGTH);
 }
 
-impl PrivateKey {
+impl<'a> PrivateKey<'a> {
     /// Derive the public key corresponding to this private key.
     pub fn public_key(&self) -> Result<PublicKey, AlkaliError> {
         require_init()?;
@@ -172,7 +172,7 @@ pub type PublicKey = [u8; PUBLIC_KEY_LENGTH];
 ///
 /// Returns a (private key, public key) keypair, or an error if an error occurred initialising
 /// Sodium. The private key should be kept private, the public key can be publicised.
-pub fn generate_keypair() -> Result<(PrivateKey, PublicKey), AlkaliError> {
+pub fn generate_keypair<'a>() -> Result<(PrivateKey<'a>, PublicKey), AlkaliError> {
     require_init()?;
 
     let mut private_key = PrivateKey::new_empty()?;
@@ -205,7 +205,9 @@ pub fn generate_keypair() -> Result<(PrivateKey, PublicKey), AlkaliError> {
 ///
 /// Returns a (private key, public key) keypair, or an error if an error occurred initialising
 /// Sodium. The private key should be kept private, the public key can be publicised.
-pub fn generate_keypair_from_seed(seed: &Seed) -> Result<(PrivateKey, PublicKey), AlkaliError> {
+pub fn generate_keypair_from_seed<'a>(
+    seed: &Seed,
+) -> Result<(PrivateKey<'a>, PublicKey), AlkaliError> {
     require_init()?;
 
     let mut private_key = PrivateKey::new_empty()?;
@@ -239,11 +241,11 @@ pub fn generate_keypair_from_seed(seed: &Seed) -> Result<(PrivateKey, PublicKey)
 ///
 /// The key exchange may fail if the server's public key is deemed insecure, in which case an error
 /// will be returned.
-pub fn derive_client_keys(
+pub fn derive_client_keys<'a, 'b>(
     client_private_key: &PrivateKey,
     client_public_key: &PublicKey,
     server_public_key: &PublicKey,
-) -> Result<(SessionKey, SessionKey), AlkaliError> {
+) -> Result<(SessionKey<'a>, SessionKey<'b>), AlkaliError> {
     require_init()?;
 
     let mut rx = SessionKey::new_empty()?;
@@ -284,11 +286,11 @@ pub fn derive_client_keys(
 ///
 /// The key exchange may fail if the client's public key is deemed insecure, in which case an error
 /// will be returned.
-pub fn derive_server_keys(
+pub fn derive_server_keys<'a, 'b>(
     server_private_key: &PrivateKey,
     server_public_key: &PublicKey,
     client_public_key: &PublicKey,
-) -> Result<(SessionKey, SessionKey), AlkaliError> {
+) -> Result<(SessionKey<'a>, SessionKey<'b>), AlkaliError> {
     require_init()?;
 
     let mut rx = SessionKey::new_empty()?;

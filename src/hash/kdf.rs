@@ -86,7 +86,7 @@ hardened_buffer! {
     Key(KEY_LENGTH);
 }
 
-impl Key {
+impl<'a> Key<'a> {
     pub fn generate() -> Result<Self, AlkaliError> {
         require_init()?;
 

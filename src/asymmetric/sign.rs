@@ -167,7 +167,7 @@ hardened_buffer! {
     Seed(KEY_SEED_LENGTH);
 }
 
-impl PrivateKey {
+impl<'a> PrivateKey<'a> {
     /// Derive the public key corresponding to this private key.
     pub fn public_key(&self) -> Result<PublicKey, AlkaliError> {
         require_init()?;
@@ -344,7 +344,7 @@ impl Multipart {
 ///
 /// Returns a (private key, public key) keypair, or an error if an error occurred initialising
 /// Sodium. The private key should be kept private, the public key can be publicised.
-pub fn generate_keypair() -> Result<(PrivateKey, PublicKey), AlkaliError> {
+pub fn generate_keypair<'a>() -> Result<(PrivateKey<'a>, PublicKey), AlkaliError> {
     require_init()?;
 
     let mut private_key = PrivateKey::new_empty()?;
@@ -377,7 +377,9 @@ pub fn generate_keypair() -> Result<(PrivateKey, PublicKey), AlkaliError> {
 ///
 /// Returns a (private key, public key) keypair, or an error if an error occurred initialising
 /// Sodium. The private key should be kept private, the public key can be publicised.
-pub fn generate_keypair_from_seed(seed: &Seed) -> Result<(PrivateKey, PublicKey), AlkaliError> {
+pub fn generate_keypair_from_seed<'a>(
+    seed: &Seed,
+) -> Result<(PrivateKey<'a>, PublicKey), AlkaliError> {
     require_init()?;
 
     let mut private_key = PrivateKey::new_empty()?;
