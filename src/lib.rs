@@ -120,6 +120,10 @@ pub enum AlkaliError {
     /// An error occurred in the [`symmetric::auth`] module.
     #[error("authentication error")]
     AuthError(#[from] symmetric::auth::AuthError),
+
+    /// An error occurred in the [`symmetric::one_time_auth`] module.
+    #[error("one-time authentication error")]
+    OneTimeAuthError(#[from] symmetric::one_time_auth::OneTimeAuthError),
 }
 
 /// Creates a hardened buffer type, for storing sensitive data (keys, passwords, etc).
