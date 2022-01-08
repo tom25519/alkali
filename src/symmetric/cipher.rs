@@ -24,6 +24,50 @@
 //! [`generate_nonce`], and the probability of nonce reuse will be effectively zero.
 //!
 //! Nonces and MACs are not secret values, and can be transmitted in the clear.
+//!
+//! # Examples
+//! Standard encryption & decryption (uses [`encrypt`] and [`decrypt`]):
+//!
+//! ```rust
+//! use alkali::symmetric::cipher;
+//!
+//! // Generate a new random key to use for encryption/decryption
+//! let key = cipher::Key::generate().unwrap();
+//! let plaintext = b"Here's a message we wish to encrypt. It can be of any length.";
+//! // Be sure to allocate `MAC_LENGTH` extra bytes to store the ciphertext
+//! let mut ciphertext = vec![0; plaintext.len() + cipher::MAC_LENGTH];
+//! // The `encrypt` function generates a random nonce which we'll need to know for decryption
+//! let (nonce, _) = cipher::encrypt(plaintext, &key, &mut ciphertext).unwrap();
+//!
+//! // ...
+//!
+//! // The ciphertext contains `MAC_LENGTH` extra bytes compared to the plaintext
+//! let mut decrypted = vec![0; ciphertext.len() - cipher::MAC_LENGTH];
+//! cipher::decrypt(&ciphertext, &key, &nonce, &mut decrypted).unwrap();
+//! assert_eq!(&plaintext[..], &decrypted[..]);
+//! ```
+//!
+//! Detached encryption & decryption, specifying our own nonce (uses
+//! [`encrypt_detached_with_nonce`], [`decrypt_detached`]):
+//!
+//! ```rust
+//! use alkali::symmetric::cipher;
+//!
+//! let key = cipher::Key::generate().unwrap();
+//! let plaintext = b"When will these examples stop?";
+//! let nonce = cipher::generate_nonce().unwrap();
+//! let mut ciphertext = vec![0; plaintext.len()];
+//! // Detached encryption doesn't prepend the MAC to the message, so we'll need to store it
+//! // separately
+//! let mac = cipher::encrypt_detached_with_nonce(plaintext, &key, &nonce, &mut ciphertext)
+//!     .unwrap();
+//!
+//! // ...
+//!
+//! let mut decrypted = [0; 30];
+//! cipher::decrypt_detached(&ciphertext, &mac, &key, &nonce, &mut decrypted).unwrap();
+//! assert_eq!(&decrypted, plaintext);
+//! ```
 
 use thiserror::Error;
 
