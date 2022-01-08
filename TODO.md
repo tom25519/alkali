@@ -8,7 +8,7 @@ APIs to implement:
 * [x] `crypto_kx`
 * [x] `crypto_onetimeauth`
 * [x] `crypto_pwhash`
-* [ ] `crypto_secretbox`
+* [x] `crypto_secretbox`
 * [ ] `crypto_secretstream`
 * [x] `crypto_shorthash`
 * [x] `crypto_sign`
