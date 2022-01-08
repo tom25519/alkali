@@ -24,6 +24,9 @@
 //! cryptographically-secure pseudo-random number generation in the [`random`] module.
 //!
 //! I want to...
+//! * Encrypt a message, so that specific trusted parties, with whom I already share a secret key,
+//!   can decrypt it
+//!     * Use [`symmetric::cipher`]
 //! * Produce a signature for a message, so that anyone can verify I sent it
 //!     * Use [`asymmetric::sign`]
 //! * Produce an authentication tag for a message, so that specific trusted parties, with whom I
@@ -120,6 +123,10 @@ pub enum AlkaliError {
     /// An error occurred in the [`symmetric::auth`] module.
     #[error("authentication error")]
     AuthError(#[from] symmetric::auth::AuthError),
+
+    /// An error occurred in the [`symmetric::cipher`] module.
+    #[error("symmetric cipher error")]
+    SymmetricCipherError(#[from] symmetric::cipher::CipherError),
 
     /// An error occurred in the [`symmetric::one_time_auth`] module.
     #[error("one-time authentication error")]
