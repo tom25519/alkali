@@ -1,7 +1,8 @@
 APIs to implement:
 * [ ] `crypto_aead`
 * [x] `crypto_auth`
-* [ ] `crypto_box`
+* [x] `crypto_box`
+* [ ] `crypto_box_seal`
 * [x] `crypto_generichash`
 * [x] `crypto_hash`
 * [x] `crypto_kdf`
