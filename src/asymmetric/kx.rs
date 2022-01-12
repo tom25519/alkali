@@ -28,9 +28,9 @@
 //!
 //! # Security Considerations
 //! If you just want to send messages between two parties, who have not yet established a shared
-//! secret, over an insecure channel, the [`asymmetric::box_`](crate::asymmetric::box_) API is more
-//! suitable for this: It does the process described above of establishing a shared secret via key
-//! exchange, and then using a symmetric cipher to actually encrypt messages.
+//! secret, over an insecure channel, the [`asymmetric::cipher`](crate::asymmetric::cipher) API is
+//! more suitable for this: It does the process described above of establishing a shared secret via
+//! key exchange, and then using a symmetric cipher to actually encrypt messages.
 //!
 //! The [`PrivateKey`] type stores the private key *unclamped* in memory. While the implementation
 //! always clamps it before use, other implementations may not do so, so if you choose to use keys
@@ -156,7 +156,7 @@ impl PrivateKey {
     }
 }
 
-/// A public key used to verify message signatures.
+/// A public key used as part of key exchange.
 ///
 /// A public key corresponds to a private key, and represents a point on the Curve25519 curve.
 ///
@@ -164,7 +164,7 @@ impl PrivateKey {
 /// key exchange with other parties).
 pub type PublicKey = [u8; PUBLIC_KEY_LENGTH];
 
-/// Generates a random X25519 private key and corresponding public key for use in signing messages.
+/// Generates a random X25519 private key and corresponding public key for use in key exchange.
 ///
 /// The generated private key will *not* be clamped, and therefore if used in other X25519
 /// implementations, it must be clamped before use. It is clamped for the public key calculation,
@@ -194,8 +194,8 @@ pub fn generate_keypair() -> Result<(PrivateKey, PublicKey), AlkaliError> {
     Ok((private_key, public_key))
 }
 
-/// Deterministically calculates an X25519 private key and corresponding public key for use in
-/// signing messages, based on the provided seed.
+/// Deterministically calculates an X25519 private key and corresponding public key for use in key
+/// exchange, based on the provided seed.
 ///
 /// Given the same seed, the same (private, public) keypair will always be generated.
 ///
@@ -328,7 +328,7 @@ mod tests {
     use crate::AlkaliError;
 
     #[test]
-    fn keypair_generation_works() -> Result<(), AlkaliError> {
+    fn keypair_generation_random() -> Result<(), AlkaliError> {
         let (private_key, public_key) = generate_keypair()?;
         assert_eq!(private_key.public_key()?, public_key);
         Ok(())

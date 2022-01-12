@@ -1,4 +1,5 @@
-//! Authenticated symmetric encryption.
+//! Symmetric [Authenticated Encryption](https://en.wikipedia.org/wiki/Authenticated_encryption)
+//! (AE).
 //!
 //! This module corresponds to the [`crypto_secretbox`
 //! API](https://doc.libsodium.org/secret-key_cryptography/secretbox) from Sodium.
@@ -93,7 +94,7 @@ pub enum CipherError {
     /// Indicates decryption of a provided ciphertext failed.
     ///
     /// This could indicate an attempted forgery, or transmission error.
-    #[error("decryption failed: ciphertext appears invalid")]
+    #[error("decryption failed")]
     DecryptionFailed,
 }
 
@@ -161,15 +162,15 @@ macro_rules! cipher_module {
             }
         }
 
-        /// A MAC (Message Authentication Code), used to authenticate the message.
+        /// A MAC (Message Authentication Code), used to authenticate a message.
         pub type MAC = [u8; MAC_LENGTH];
 
-        /// A nonce, used to introduce non-determinism into the encryption calculation.
+        /// A nonce, used to introduce non-determinism into the keystream calculation.
         pub type Nonce = [u8; NONCE_LENGTH];
 
         /// Generate a random nonce for use with the functions throughout this module.
         ///
-        /// THe cipher used here has a sufficiently long nonce size that we can simply generate a
+        /// The cipher used here has a sufficiently long nonce size that we can simply generate a
         /// random nonce for every message we wish to encrypt, and the chances of reusing a nonce
         /// are essentially zero.
         ///
@@ -211,8 +212,6 @@ macro_rules! cipher_module {
             key: &Key,
             output: &mut [u8],
         ) -> Result<(Nonce, usize), $crate::AlkaliError> {
-            $crate::require_init()?;
-
             let nonce = generate_nonce()?;
             let c_len = encrypt_with_nonce(message, key, &nonce, output)?;
 
@@ -323,8 +322,6 @@ macro_rules! cipher_module {
             key: &Key,
             output: &mut [u8],
         ) -> Result<(Nonce, MAC), $crate::AlkaliError> {
-            $crate::require_init()?;
-
             let nonce = generate_nonce()?;
             let mac = encrypt_detached_with_nonce(message, key, &nonce, output)?;
 
@@ -419,7 +416,7 @@ macro_rules! cipher_module {
         ///
         /// If authentication + decryption succeed, the decrypted message will be written to
         /// `output`. `output` must be at least `ciphertext.len()` - [`MAC_LENGTH`] bytes,
-        /// otherwise, an error will be returned.
+        /// otherwise an error will be returned.
         ///
         /// Returns the length of the plaintext written to `output`, which will always be
         /// `ciphertext.len()` - [`MAC_LENGTH`] bytes.
@@ -432,7 +429,7 @@ macro_rules! cipher_module {
             $crate::require_init()?;
 
             if ciphertext.len() < MAC_LENGTH {
-                return Err(crate::symmetric::cipher::CipherError::DecryptionFailed.into());
+                return Err($crate::symmetric::cipher::CipherError::DecryptionFailed.into());
             }
 
             let m_len = ciphertext.len() - MAC_LENGTH;
@@ -483,9 +480,6 @@ macro_rules! cipher_module {
         /// If authentication + decryption succeed, the decrypted message will be written to
         /// `output`. `output` must be at least `ciphertext.len()` bytes, otherwise, an error will
         /// be returned.
-        ///
-        /// Returns the length of the plaintext written to `output`, which will always be
-        /// `ciphertext.len()` bytes.
         pub fn decrypt_detached(
             ciphertext: &[u8],
             mac: &MAC,
@@ -542,7 +536,7 @@ macro_rules! cipher_tests {
         nonce: $nonce:expr,
         c: $c:expr,
         mac: $mac:expr,
-    }, )*) => {
+    }, )* ) => {
         use super::{
             decrypt, decrypt_detached, encrypt, encrypt_with_nonce, encrypt_detached,
             encrypt_detached_with_nonce, Key, MAC_LENGTH
@@ -650,7 +644,10 @@ macro_rules! cipher_tests {
             $(
                 key.copy_from_slice(&$key);
                 let mut c = vec![0; $msg.len() + MAC_LENGTH];
-                assert_eq!(encrypt_with_nonce(&$msg, &key, &$nonce, &mut c)?, $msg.len() + MAC_LENGTH);
+                assert_eq!(
+                    encrypt_with_nonce(&$msg, &key, &$nonce, &mut c)?,
+                    $msg.len() + MAC_LENGTH
+                );
                 assert_eq!(&c[..MAC_LENGTH], &$mac[..]);
                 assert_eq!(&c[MAC_LENGTH..], &$c[..]);
                 let mut m = vec![0; $msg.len()];

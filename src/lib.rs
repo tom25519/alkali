@@ -24,6 +24,8 @@
 //! cryptographically-secure pseudo-random number generation in the [`random`] module.
 //!
 //! I want to...
+//! * Encrypt a message for a specific party using their public key
+//!     * Use [`asymmetric::cipher`]
 //! * Encrypt a message, so that specific trusted parties, with whom I already share a secret key,
 //!   can decrypt it
 //!     * Use [`symmetric::cipher`]
@@ -95,6 +97,10 @@ pub enum AlkaliError {
     /// The 0th item is the expected length, the 1st item is the actual length of the slice.
     #[error("incorrect slice length: expected {0}, found {1}")]
     IncorrectSliceLength(usize, usize),
+
+    /// An error occurred in the [`asymmetric::cipher`] module.
+    #[error("asymmetric cipher error")]
+    AsymmetricCipherError(#[from] asymmetric::cipher::CipherError),
 
     /// An error occurred in the [`asymmetric::kx`] module.
     #[error("key exchange error")]
