@@ -1,0 +1,28 @@
+name: unit-tests
+
+on: [push, pull_request]
+
+env:
+  RUSTFLAGS: '-Dwarnings'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: cargo test
+      - run: cargo test --release
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: cargo doc
