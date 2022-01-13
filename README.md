@@ -1,6 +1,7 @@
 # alkali
 [![crates.io](https://img.shields.io/crates/v/alkali.svg)](https://crates.io/crates/alkali)
 [![docs.rs](https://docs.rs/alkali/badge.svg)](https://docs.rs/alkali)
+[![CI status](https://github.com/tom25519/alkali/actions/workflows/tests.yml/badge.svg?event=push)](https://github.com/tom25519/alkali/actions)
 
 **Please note**: This is currently a work-in-progress, and isn't yet complete,
 nor is it suitable for production usage.
