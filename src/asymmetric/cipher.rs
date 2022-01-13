@@ -69,7 +69,7 @@
 //! ```
 //!
 //! Precalculating the shared secret key, which can be useful if many messages are exchanged
-//! between the same parties (uses [`precalculate_shared_key`], [`encrypt_precalculated`], and
+//! between the same parties (uses [`SharedKey::calculate`], [`encrypt_precalculated`], and
 //! [`decrypt_precalculated`]):
 //!
 //! ```rust
@@ -78,7 +78,7 @@
 //! let (sender_private, sender_public) = cipher::generate_keypair().unwrap();
 //! let (receiver_private, receiver_public) = cipher::generate_keypair().unwrap();
 //!
-//! let shared_key = cipher::precalculate_shared_key(&sender_private, &receiver_public).unwrap();
+//! let shared_key = cipher::SharedKey::calculate(&sender_private, &receiver_public).unwrap();
 //!
 //! let msg = b"I would also like to be encrypted :)";
 //! let mut ciphertext = [0; 36 + cipher::MAC_LENGTH];
@@ -88,7 +88,7 @@
 //! // ...
 //!
 //! // This will calculate the same shared key as on the sender's side
-//! let shared_key = cipher::precalculate_shared_key(&receiver_private, &sender_public).unwrap();
+//! let shared_key = cipher::SharedKey::calculate(&receiver_private, &sender_public).unwrap();
 //!
 //! let mut plaintext = [0; 36];
 //! cipher::decrypt_precalculated(&ciphertext, &shared_key, &nonce, &mut plaintext).unwrap();
@@ -263,6 +263,58 @@ macro_rules! cipher_module {
             }
         }
 
+        impl SharedKey {
+            /// Precalculate the shared secret key to speed up subsequent encryption/decryption
+            /// operations.
+            ///
+            /// As stated in the module description, this API works by first calculating a shared
+            /// secret using our private key and the other party's public key, and then using this
+            /// shared secret to encrypt messages. If many messages are to be sent to/received from
+            /// the same person, it can be inefficient to perfom this calculation for every
+            /// message, since the derived secret is the same every time. This function
+            /// precalculates the shared secret, so it doesn't need to be calculated every time.
+            ///
+            /// The first argument to this function should be party A's private key. The second
+            /// should be the public key of party B, with whom A is exchanging messages. Returns
+            /// the derived shared secret key.
+            ///
+            /// # Security Concerns
+            /// The key derived in this function should be protected as closely as any other secret
+            /// key.
+            pub fn calculate(
+                private_key: &PrivateKey,
+                public_key: &PublicKey,
+            ) -> Result<SharedKey, $crate::AlkaliError> {
+                $crate::require_init()?;
+
+                let mut shared_key = Self::new_empty()?;
+
+                let res = unsafe {
+                    // SAFETY: The first argument to this function is the destination to which the
+                    // shared secret key will be written. We have defined the `SharedKey` type to
+                    // store `crypto_box_BEFORENMBYTES`, and therefore it is sufficient to store
+                    // the shared secret key. The second argument is a pointer to the other party's
+                    // public key from which the shared secret will be derived. The `PublicKey`
+                    // type is defined to be `crypto_box_PUBLICKEYBYTES`, so it is the expected
+                    // size for use with this function. The third argument is a pointer to our
+                    // private key, from which the shared secret will be derived. The `PrivateKey`
+                    // type stores `crypto_box_SECRETKEYBYTES`, so it is of the expected size for
+                    // use with this function.
+                    $beforenm(
+                        shared_key.inner_mut() as *mut libc::c_uchar,
+                        public_key.as_ptr(),
+                        private_key.inner() as *const libc::c_uchar,
+                    )
+                };
+
+                if res == 0 {
+                    Ok(shared_key)
+                } else {
+                    Err($crate::asymmetric::cipher::CipherError::PublicKeyInsecure.into())
+                }
+            }
+        }
+
         /// A public key used by a party for asymmetric AE.
         ///
         /// A public key corresponds to a private key, and represents a point on the Curve25519
@@ -361,56 +413,6 @@ macro_rules! cipher_module {
             }
 
             Ok((private_key, public_key))
-        }
-
-        /// Precalculate the shared secret key to speed up subsequent encryption/decryption
-        /// operations.
-        ///
-        /// As stated in the module description, this API works by first calculating a shared
-        /// secret using our private key and the other party's public key, and then using this
-        /// shared secret to encrypt messages. If many messages are to be sent to/received from the
-        /// same person, it can be inefficient to perfom this calculation for every message, since
-        /// the derived secret is the same every time. This function precalculates the shared
-        /// secret, so it doesn't need to be calculated every time.
-        ///
-        /// The first argument to this function should be party A's private key. The second should
-        /// be the public key of party B, with whom A is exchanging messages. Returns the derived
-        /// shared secret key.
-        ///
-        /// # Security Concerns
-        /// The key derived in this function should be protected as closely as any other secret
-        /// key.
-        pub fn precalculate_shared_key(
-            private_key: &PrivateKey,
-            public_key: &PublicKey,
-        ) -> Result<SharedKey, $crate::AlkaliError> {
-            $crate::require_init()?;
-
-            let mut shared_key = SharedKey::new_empty()?;
-
-            let res = unsafe {
-                // SAFETY: The first argument to this function is the destination to which the
-                // shared secret key will be written. We have defined the `SharedKey` type to store
-                // `crypto_box_BEFORENMBYTES`, and therefore it is sufficient to store the shared
-                // secret key. The second argument is a pointer to the other party's public key
-                // from which the shared secret will be derived. The `PublicKey` type is defined to
-                // be `crypto_box_PUBLICKEYBYTES`, so it is the expected size for use with this
-                // function. The third argument is a pointer to our private key, from which the
-                // shared secret will be derived. The `PrivateKey` type stores
-                // `crypto_box_SECRETKEYBYTES`, so it is of the expected size for use with this
-                // function.
-                $beforenm(
-                    shared_key.inner_mut() as *mut libc::c_uchar,
-                    public_key.as_ptr(),
-                    private_key.inner() as *const libc::c_uchar,
-                )
-            };
-
-            if res == 0 {
-                Ok(shared_key)
-            } else {
-                Err($crate::asymmetric::cipher::CipherError::PublicKeyInsecure.into())
-            }
         }
 
         /// Generate a random nonce for use with the functions throughout this module.
@@ -700,11 +702,11 @@ macro_rules! cipher_module {
         }
 
         /// Encrypt `message` using the shared secret key precalculated with
-        /// [`precalculate_shared_key`], writing the result to `output`.
+        /// [`SharedKey::calculate`], writing the result to `output`.
         ///
         /// `message` should be the message to encrypt. `shared_key` should be the [`SharedKey`],
         /// derived from the sender's private key and receiver's public key using
-        /// [`precalculate_shared_key`].
+        /// [`SharedKey::calculate`].
         ///
         /// The encrypted ciphertext will be written to `output`, which must be at least
         /// [`MAC_LENGTH`] bytes longer than `message`. If the `output` slice is not sufficient to
@@ -739,11 +741,11 @@ macro_rules! cipher_module {
         }
 
         /// Encrypt `message` using the shared secret key precalculated with
-        /// [`precalculate_shared_key`] and nonce `nonce`, writing the result to `output`.
+        /// [`SharedKey::calculate`] and nonce `nonce`, writing the result to `output`.
         ///
         /// `message` should be the message to encrypt. `shared_key` should be the [`SharedKey`],
         /// derived from the sender's private key and receiver's public key using
-        /// [`precalculate_shared_key`].
+        /// [`SharedKey::calculate`].
         ///
         /// `nonce` should be a nonce to use. It is *vital* that a given nonce *never* be reused
         /// with the same key. It is best to simply generate a random nonce for every message using
@@ -813,7 +815,7 @@ macro_rules! cipher_module {
         }
 
         /// Encrypt `message` using the shared secret key precalculated with
-        /// [`precalculate_shared_key`], writing the result to `output`, but not prepending the
+        /// [`SharedKey::calculate`], writing the result to `output`, but not prepending the
         /// MAC.
         ///
         /// This function is very similar to the [`encrypt_precalculated`] function. The difference
@@ -824,7 +826,7 @@ macro_rules! cipher_module {
         ///
         /// `message` should be the message to encrypt. `shared_key` should be the [`SharedKey`],
         /// derived from the sender's private key and receiver's public key using
-        /// [`precalculate_shared_key`].
+        /// [`SharedKey::calculate`].
         ///
         /// The encrypted ciphertext will be written to `output`, which must be at least
         /// `message.len()` bytes long. If the `output` slice is not sufficient to store the
@@ -859,7 +861,7 @@ macro_rules! cipher_module {
         }
 
         /// Encrypt `message` using the shared secret key precalculated with
-        /// [`precalculate_shared_key`] and nonce `nonce`, writing the result to `output`, but not
+        /// [`SharedKey::calculate`] and nonce `nonce`, writing the result to `output`, but not
         /// prepending the MAC.
         ///
         /// This function is very similar to the [`encrypt_with_nonce_precalculated`] function. The
@@ -870,7 +872,7 @@ macro_rules! cipher_module {
         ///
         /// `message` should be the message to encrypt. `shared_key` should be the [`SharedKey`],
         /// derived from the sender's private key and receiver's public key using
-        /// [`precalculate_shared_key`].
+        /// [`SharedKey::calculate`].
         ///
         /// `nonce` should be a nonce to use. It is *vital* that a given nonce *never* be reused
         /// with the same key. It is best to simply generate a random nonce for every message using
@@ -1073,12 +1075,12 @@ macro_rules! cipher_module {
         }
 
         /// Try to decrypt `ciphertext` using the shared secret key precalculated with
-        /// [`precalculate_shared_key`] (previously encrypted using [`encrypt`]), writing the
+        /// [`SharedKey::calculate`] (previously encrypted using [`encrypt`]), writing the
         /// result to `output`.
         ///
         /// `ciphertext` should be a message to try to decrypt. `shared_key` should be the
         /// [`SharedKey`], derived from the sender's private key and receiver's public key using
-        /// [`precalculate_shared_key`]. `nonce` should be the [`Nonce`] the message was encrypted
+        /// [`SharedKey::calculate`]. `nonce` should be the [`Nonce`] the message was encrypted
         /// with.
         ///
         /// If authentication + decryption succeed, the decrypted message will be written to
@@ -1137,13 +1139,13 @@ macro_rules! cipher_module {
         }
 
         /// Try to decrypt `ciphertext` using the shared secret key precalculated with
-        /// [`precalculate_shared_key`] (previously encrypted using [`encrypt_detached`]), writing
-        /// the result to `output`.
+        /// [`SharedKey::calculate`] (previously encrypted using [`encrypt_detached`]), writing the
+        /// result to `output`.
         ///
         /// `ciphertext` should be a message to try to decrypt, `mac` the [`MAC`] (Message
         /// Authentication Code) for this message. `shared_key` should be the [`SharedKey`],
         /// derived from the sender's private key and receiver's public key using
-        /// [`precalculate_shared_key`]. `nonce` should be the [`Nonce`] the message was encrypted
+        /// [`SharedKey::calculate`]. `nonce` should be the [`Nonce`] the message was encrypted
         /// with.
         ///
         /// If authentication + decryption succeed, the decrypted message will be written to
@@ -1213,7 +1215,7 @@ macro_rules! cipher_tests {
             encrypt, encrypt_detached, encrypt_detached_precalculated, encrypt_detached_with_nonce,
             encrypt_precalculated, encrypt_detached_with_nonce_precalculated, encrypt_with_nonce,
             encrypt_with_nonce_precalculated, generate_keypair, generate_keypair_from_seed,
-            precalculate_shared_key, PrivateKey, Seed, MAC_LENGTH
+            PrivateKey, Seed, SharedKey, MAC_LENGTH
         };
         use $crate::AlkaliError;
         use $crate::random::fill_random;
@@ -1348,7 +1350,7 @@ macro_rules! cipher_tests {
         fn enc_and_dec_precalculated() -> Result<(), AlkaliError> {
             let (priv_x, _) = generate_keypair()?;
             let (_, pub_y) = generate_keypair()?;
-            let key = precalculate_shared_key(&priv_x, &pub_y)?;
+            let key = SharedKey::calculate(&priv_x, &pub_y)?;
 
             let mut msg_a = [];
             let mut msg_b = [0; 16];
@@ -1396,7 +1398,7 @@ macro_rules! cipher_tests {
         fn enc_and_dec_detached_precalculated() -> Result<(), AlkaliError> {
             let (priv_x, _) = generate_keypair()?;
             let (_, pub_y) = generate_keypair()?;
-            let key = precalculate_shared_key(&priv_x, &pub_y)?;
+            let key = SharedKey::calculate(&priv_x, &pub_y)?;
 
             let mut msg_a = [];
             let mut msg_b = [0; 16];
@@ -1506,7 +1508,7 @@ macro_rules! cipher_tests {
                 let pub_b = priv_b.public_key()?;
 
                 let mut c = vec![0; $msg.len() + MAC_LENGTH];
-                let key = precalculate_shared_key(&priv_a, &pub_b)?;
+                let key = SharedKey::calculate(&priv_a, &pub_b)?;
                 assert_eq!(
                     encrypt_with_nonce_precalculated(&$msg, &key, &$nonce, &mut c)?,
                     $msg.len() + MAC_LENGTH
@@ -1515,7 +1517,7 @@ macro_rules! cipher_tests {
                 assert_eq!(&c[MAC_LENGTH..], &$c);
 
                 let mut m = vec![0; $msg.len()];
-                let key = precalculate_shared_key(&priv_b, &pub_a)?;
+                let key = SharedKey::calculate(&priv_b, &pub_a)?;
                 assert_eq!(decrypt_precalculated(&c, &key, &$nonce, &mut m)?, $msg.len());
                 assert_eq!(&m, &$msg);
             )*
@@ -1535,13 +1537,13 @@ macro_rules! cipher_tests {
                 let pub_b = priv_b.public_key()?;
 
                 let mut c = vec![0; $msg.len()];
-                let key = precalculate_shared_key(&priv_a, &pub_b)?;
+                let key = SharedKey::calculate(&priv_a, &pub_b)?;
                 let mac = encrypt_detached_with_nonce_precalculated(&$msg, &key, &$nonce, &mut c)?;
                 assert_eq!(&c, &$c);
                 assert_eq!(&mac, &$mac);
 
                 let mut m = vec![0; $msg.len()];
-                let key = precalculate_shared_key(&priv_b, &pub_a)?;
+                let key = SharedKey::calculate(&priv_b, &pub_a)?;
                 decrypt_detached_precalculated(&c, &mac, &key, &$nonce, &mut m)?;
                 assert_eq!(&m, &$msg);
             )*
@@ -1649,8 +1651,8 @@ pub mod curve25519xsalsa20poly1305 {
             let (private_key_a, public_key_a) = generate_keypair_from_seed(&seed_a)?;
             let (private_key_b, public_key_b) = generate_keypair_from_seed(&seed_b)?;
 
-            let shared_x = precalculate_shared_key(&private_key_a, &public_key_b)?;
-            let shared_y = precalculate_shared_key(&private_key_b, &public_key_a)?;
+            let shared_x = SharedKey::calculate(&private_key_a, &public_key_b)?;
+            let shared_y = SharedKey::calculate(&private_key_b, &public_key_a)?;
 
             assert_eq!(shared_x, shared_y);
             assert_eq!(
@@ -1765,8 +1767,8 @@ pub mod curve25519xchacha20poly1305 {
             let (private_key_a, public_key_a) = generate_keypair_from_seed(&seed_a)?;
             let (private_key_b, public_key_b) = generate_keypair_from_seed(&seed_b)?;
 
-            let shared_x = precalculate_shared_key(&private_key_a, &public_key_b)?;
-            let shared_y = precalculate_shared_key(&private_key_b, &public_key_a)?;
+            let shared_x = SharedKey::calculate(&private_key_a, &public_key_b)?;
+            let shared_y = SharedKey::calculate(&private_key_b, &public_key_a)?;
 
             assert_eq!(shared_x, shared_y);
             assert_eq!(
