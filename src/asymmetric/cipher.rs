@@ -19,13 +19,13 @@
 //! # Algorithm Details
 //! [X25519](https://en.wikipedia.org/wiki/Curve25519) (Elliptic-Curve Diffie-Hellman over
 //! Curve25519) is used to perform the key exchange. By default,
-//! [XSalsa20](https://en.wikipedia.org/wiki/Salsa20) (Salsa20 with an eXtended nonce) is used for
+//! [XSalsa20](https://en.wikipedia.org/wiki/Salsa20) (Salsa20 with an extended nonce) is used for
 //! the symmetric cipher, and [Poly1305](https://en.wikipedia.org/wiki/Poly1305) is used for
 //! message authentication. This construction is exposed in the [`curve25519xsalsa20poly1305`]
 //! module.
 //!
 //! A variant which uses [XChaCha20](https://en.wikipedia.org/wiki/Salsa20#ChaCha_variant)
-//! (ChaCha20 with an eXtended nonce) for the symmetric cipher is also available as
+//! (ChaCha20 with an extended nonce) for the symmetric cipher is also available as
 //! [`curve25519xchacha20poly1305`].
 //!
 //! # Security Considerations
@@ -38,8 +38,13 @@
 //! [`generate_nonce`], and the probability of nonce reuse will be effectively zero.
 //!
 //! Public keys, nonces and MACs are not secret values, and can be transmitted in the clear.
-//! However, secret keys must be kept private: Parties do not need to know each others' secret key
-//! to communicate.
+//! However, private keys must be kept private: Parties do not need to know each others' private
+//! keys to communicate.
+//!
+//! In this construction, either party can both encrypt & decrypt messages, and compute a valid
+//! authentication tag for any encrypted message. Furthermore, the recipient must know the identity
+//! of the sender to receive and decrypt messages. If any of these factors are a concern, the
+//! [`crate::asymmetric::repudiable_cipher`] API should be used.
 //!
 //! # Examples
 //! Generating a random keypair for a sender & receiver, and encrypting/decrypting messages (uses
@@ -183,7 +188,8 @@ macro_rules! cipher_module {
         /// The length of a public key for asymmetric AE, in bytes.
         pub const PUBLIC_KEY_LENGTH: usize = $public_key_len as usize;
 
-        /// The length of a derive shared secret key for asymmetric AE, in bytes.
+        /// The length of a shared secret key (derived from a key exchange between two parties) for
+        /// asymmetric AE, in bytes.
         pub const SHARED_KEY_LENGTH: usize = $shared_key_len as usize;
 
         /// The length of a seed to use for the deterministic generation of a (private key, public
@@ -211,7 +217,13 @@ macro_rules! cipher_module {
             /// its contents.
             PrivateKey(PRIVATE_KEY_LENGTH);
 
-            /// The shared secret key derived during the key exchange used in asymmetric AE.
+            /// A shared secret key derived during the key exchange used in asymmetric AE.
+            ///
+            /// This can be precalculated if many messages are to be exchanged between the same two
+            /// parties, to speed up encryption/decryption. Use [`SharedKey::calculate`] to
+            /// precalculate the shared key, then use the `_precalculated` variants of the
+            /// functions in this module (e.g: [`encrypt_precalculated`],
+            /// [`decrypt_detached_precalculated`], ...).
             ///
             /// This should be kept secret, otherwise anyone can read the contents of encrypted
             /// messages.
@@ -331,7 +343,7 @@ macro_rules! cipher_module {
         pub type Nonce = [u8; NONCE_LENGTH];
 
         lazy_static::lazy_static! {
-            /// The maximum message length which can be encrypted with this cipher
+            /// The maximum message length which can be encrypted with this cipher, in bytes.
             pub static ref MESSAGE_LENGTH_MAX: usize = unsafe {
                 // SAFETY: This function just returns a constant value, and should always be safe
                 // to call.
@@ -341,13 +353,14 @@ macro_rules! cipher_module {
 
         /// Generates a random private key, and corresponding public key, for use in asymmetric AE.
         ///
-        /// The generate private key will *not* be clamped, and therefore if used in other X25519
-        /// implementations, it must be clamped before use. It is automatically clamped during the
-        /// public key calculation, and for other calculations within the Sodium implementation.
-        ///
         /// Returns a (private key, public key) keypair, or an error if an error occurred
         /// initialising Sodium. The private key should be kept private, the public key can be
         /// publicised.
+        ///
+        /// # Security Considerations
+        /// The generated private key will *not* be clamped, and therefore if used in other X25519
+        /// implementations, it must be clamped before use. It is automatically clamped during the
+        /// public key calculation, and for other calculations within the Sodium implementation.
         pub fn generate_keypair() -> Result<(PrivateKey, PublicKey), $crate::AlkaliError> {
             $crate::require_init()?;
 
@@ -377,13 +390,14 @@ macro_rules! cipher_module {
         ///
         /// Given the same seed, the same (private, public) keypair will always be generated.
         ///
-        /// The generated private key will *not* be clamped, and therefore if used in other X25519
-        /// implementations, it must be clamped before use. It is automatically clamped during the
-        /// public key calculation, and for other calculations within the Sodium implementation.
-        ///
         /// Returns a (private key, public key) keypair, or an error if an error occurred
         /// initialising Sodium. The private key should be kept private, the public key can be
         /// publicised.
+        ///
+        /// # Security Considerations
+        /// The generated private key will *not* be clamped, and therefore if used in other X25519
+        /// implementations, it must be clamped before use. It is automatically clamped during the
+        /// public key calculation, and for other calculations within the Sodium implementation.
         pub fn generate_keypair_from_seed(
             seed: &Seed,
         ) -> Result<(PrivateKey, PublicKey), $crate::AlkaliError> {
@@ -417,12 +431,12 @@ macro_rules! cipher_module {
 
         /// Generate a random nonce for use with the functions throughout this module.
         ///
-        /// The cipher used here has a sufficiently long nonce size that we can simply generate a
-        /// random nonce for every message we wish to encrypt, and the chances of reusing a nonce
-        /// are essentially zero.
+        /// The cipher used here has a sufficient nonce size that we can simply generate a random
+        /// nonce for every message we wish to encrypt, and the chances of reusing a nonce are
+        /// essentially zero.
         ///
         /// Returns a nonce generated using a Cryptographically Secure Pseudo-Random Number
-        /// Generator, an an error if some error occurred.
+        /// Generator, or a [`crate::AlkaliError`] if an error occurred.
         pub fn generate_nonce() -> Result<Nonce, $crate::AlkaliError> {
             let mut nonce = [0; NONCE_LENGTH];
             $crate::random::fill_random(&mut nonce)?;
@@ -450,7 +464,7 @@ macro_rules! cipher_module {
         /// Nonces do not need to be kept secret.
         ///
         /// Returns the nonce used, and the length of the ciphertext written to `output` (which
-        /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes.
+        /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes).
         ///
         /// # Security Considerations
         /// For the algorithms in this module, nonces must *never* be used more than once with the
@@ -497,9 +511,9 @@ macro_rules! cipher_module {
         /// # Security Considerations
         /// For the algorithms in this module, nonces must *never* be used more than once with the
         /// same receiver and sender. Please ensure you never use a given nonce more than once with
-        /// the same key: Nonces for the algorithms here are sufficiently long that a nonce can be
-        /// randomly chosen for every message using [`generate_nonce`], and the probability of
-        /// nonce reuse will be effectively zero.
+        /// the same key: The nonce size used here is sufficient that a nonce can be randomly
+        /// chosen for every message using [`generate_nonce`], and the probability of nonce reuse
+        /// will be effectively zero.
         ///
         /// Nonces and MACs are not secret values, and can be transmitted in the clear.
         pub fn encrypt_with_nonce(
