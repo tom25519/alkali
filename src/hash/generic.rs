@@ -70,19 +70,19 @@
 //! ```rust
 //! use alkali::hash::generic;
 //!
-//! let mut output_a = [0u8; generic::DIGEST_LENGTH_DEFAULT];
-//! let mut state_a = generic::Multipart::new(&mut output_a).unwrap();
+//! let mut state_a = generic::Multipart::new(generic::DIGEST_LENGTH_DEFAULT).unwrap();
 //! state_a.update(b"Here's the first part");
 //! state_a.update(b"... And the second!");
-//! state_a.calculate_hash();
+//! let mut output_a = [0u8; generic::DIGEST_LENGTH_DEFAULT];
+//! state_a.calculate_hash(&mut output_a);
 //!
-//! let mut output_b = [255u8; generic::DIGEST_LENGTH_DEFAULT];
-//! let mut state_b = generic::Multipart::new(&mut output_b).unwrap();
+//! let mut state_b = generic::Multipart::new(generic::DIGEST_LENGTH_DEFAULT).unwrap();
 //! state_b.update(b"Here");
 //! state_b.update(b"'s the first ");
 //! state_b.update(b"part... And the ");
 //! state_b.update(b"second!");
-//! state_b.calculate_hash();
+//! let mut output_b = [255u8; generic::DIGEST_LENGTH_DEFAULT];
+//! state_b.calculate_hash(&mut output_b);
 //!
 //! assert_eq!(output_a, output_b);
 //! ```
@@ -105,6 +105,11 @@ pub enum GenericHashError {
     /// collisions should be avoided.
     #[error("digest length outside acceptable range")]
     DigestLengthInvalid,
+
+    /// The output buffer size for [`Multipart::calculate_hash`] differs from the output length
+    /// specified in [`Multipart::new`] or [`Multipart::new_keyed`].
+    #[error("output length changed from length specified on instantiation")]
+    OutputLengthChanged,
 
     /// The provided key was too long for use with this algorithm.
     ///
@@ -199,22 +204,22 @@ pub type Digest = [u8; DIGEST_LENGTH_DEFAULT];
 /// The output size for the hash should be at least [`DIGEST_LENGTH_DEFAULT`] bytes to ensure
 /// collision-resistance.
 #[derive(Debug)]
-pub struct Multipart<'o> {
-    output: &'o mut [u8],
+pub struct Multipart {
+    output_len: usize,
     state: ptr::NonNull<sodium::crypto_generichash_blake2b_state>,
     _marker: PhantomData<sodium::crypto_generichash_blake2b_state>,
 }
 
-impl<'o> Multipart<'o> {
+impl Multipart {
     /// Create a new instance of the struct.
     ///
-    /// `output` should be the location to which the calculated hash will be written. It should be
-    /// between [`DIGEST_LENGTH_MIN`] and [`DIGEST_LENGTH_MAX`] bytes. To ensure
-    /// collision-resistance, a minimum of [`DIGEST_LENGTH_DEFAULT`] should be used.
-    pub fn new(output: &'o mut [u8]) -> Result<Self, AlkaliError> {
+    /// `output_len` should be the desired output length of the hash function. It should be between
+    /// [`DIGEST_LENGTH_MIN`] and [`DIGEST_LENGTH_MAX`] bytes. To ensure collision-resistance, a
+    /// minimum of [`DIGEST_LENGTH_DEFAULT`] should be used.
+    pub fn new(output_len: usize) -> Result<Self, AlkaliError> {
         require_init()?;
 
-        if output.len() < DIGEST_LENGTH_MIN || output.len() > DIGEST_LENGTH_MAX {
+        if output_len < DIGEST_LENGTH_MIN || output_len > DIGEST_LENGTH_MAX {
             return Err(GenericHashError::DigestLengthInvalid.into());
         }
 
@@ -236,41 +241,41 @@ impl<'o> Multipart<'o> {
             // is specified in the Sodium documentation that using a NULL pointer for the key
             // argument means it is simply ignored, along with the key size, which is the desired
             // behaviour here. The final argument is the desired length of the hash output. We use
-            // `output.len()`, which we have ensured is acceptable above.
+            // `output_len`, which we have ensured is acceptable above.
             sodium::crypto_generichash_blake2b_init(
                 state.as_mut(),
                 ptr::null::<libc::c_uchar>(),
                 0,
-                output.len(),
+                output_len,
             );
 
             state
         };
 
         Ok(Self {
+            output_len,
             state,
-            output,
             _marker: PhantomData,
         })
     }
 
     /// Create a new instance of the struct, using the provided key in the hash calculation.
     ///
-    /// `output` should be the location to which the calculated hash will be written. It should be
-    /// between [`DIGEST_LENGTH_MIN`] and [`DIGEST_LENGTH_MAX`] bytes. To ensure
-    /// collision-resistance, a minimum of [`DIGEST_LENGTH_DEFAULT`] should be used.
-    ///
     /// `key` will be used in the calculation of the hash.  The same `(message, key)` combination
     /// will always produce the same hash. A different key will produce a different hash for the
     /// same message.
     ///
+    /// `output_len` should be the desired output length of the hash function. It should be between
+    /// [`DIGEST_LENGTH_MIN`] and [`DIGEST_LENGTH_MAX`] bytes. To ensure collision-resistance, a
+    /// minimum of [`DIGEST_LENGTH_DEFAULT`] should be used.
+    ///
     /// This can be used to ensure different applications generate different hashes even when
     /// processing the same data, or as a
     /// [MAC](https://en.wikipedia.org/wiki/Message_authentication_code).
-    pub fn new_keyed(output: &'o mut [u8], key: &Key) -> Result<Self, AlkaliError> {
+    pub fn new_keyed(key: &Key, output_len: usize) -> Result<Self, AlkaliError> {
         require_init()?;
 
-        if output.len() < DIGEST_LENGTH_MIN || output.len() > DIGEST_LENGTH_MAX {
+        if output_len < DIGEST_LENGTH_MIN || output_len > DIGEST_LENGTH_MAX {
             return Err(GenericHashError::DigestLengthInvalid.into());
         }
 
@@ -291,13 +296,13 @@ impl<'o> Multipart<'o> {
             // function. The second and third arguments specify the key to use, and its length. We
             // have defined the `Key` type to be suitable for use with this function. We use
             // `key.len()` to specify the length, so it is correct here. The final argument is the
-            // desired length of the hash output. We use `output.len()`, which we have ensured is
+            // desired length of the hash output. We use `output_len`, which we have ensured is
             // acceptable above.
             sodium::crypto_generichash_blake2b_init(
                 state.as_mut(),
                 key.inner() as *const libc::c_uchar,
                 key.len(),
-                output.len(),
+                output_len,
             );
 
             // The state is now initialised correctly.
@@ -305,10 +310,43 @@ impl<'o> Multipart<'o> {
         };
 
         Ok(Self {
+            output_len,
             state,
-            output,
             _marker: PhantomData,
         })
+    }
+
+    /// Create a new instance of the struct, in the same state as this one.
+    pub fn try_clone(&self) -> Result<Self, AlkaliError> {
+        let state = unsafe {
+            // SAFETY: This call to malloc() will allocate the memory required for a
+            // `crypto_generichash_state` type, outside of Rust's memory management. The associated
+            // memory is always freed in the corresponding `drop` call. We never free the memory in
+            // any other place in this struct, and drop can only be called once, so a double-free
+            // is not possible. We never give out a pointer to the allocated memory. See the drop
+            // implementation for more reasoning on safety.
+            let mut state = mem::malloc()?;
+
+            // SAFETY: We have called `malloc` to allocate sufficient space for one
+            // `crypto_generichash_state` struct at each of the two pointers used here, so both are
+            // valid for reads/writes of `size_of::<crypto_sign_state>` bytes. We have just
+            // allocated a fresh region of memory for `state`, so it definitely doesn't overlap
+            // with `self.state`.
+            ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
+
+            state
+        };
+
+        Ok(Self {
+            output_len: self.output_len,
+            state,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Get the output length specified when instantiating this struct.
+    pub fn get_output_len(&self) -> usize {
+        self.output_len
     }
 
     /// Add message contents to hash.
@@ -330,11 +368,15 @@ impl<'o> Multipart<'o> {
         }
     }
 
-    /// Calculate the hash and write it to `self.output`.
+    /// Calculate the hash and write it to `output`.
     ///
-    /// The length of `self.output` is used to determine the length of the output. The whole slice
-    /// will be filled.
-    pub fn calculate_hash(mut self) {
+    /// `output` must be the same length specified when instantiating the struct with
+    /// [`Multipart::new`] or [`Multipart::new_keyed`], otherwise an error will be returned.
+    pub fn calculate_hash(mut self, output: &mut [u8]) -> Result<(), AlkaliError> {
+        if output.len() != self.output_len {
+            return Err(GenericHashError::OutputLengthChanged.into());
+        }
+
         unsafe {
             // SAFETY: The first argument should be a pointer to a
             // crypto_generichash_blake2b_state struct. We pass a pointer to the struct as defined
@@ -343,17 +385,20 @@ impl<'o> Multipart<'o> {
             // function. The initialisation of the `Multipart` struct requires a call to the `init`
             // function, so the struct is correctly initialised. The next two arguments specify the
             // destination to which the hash should be written. In the initialisation of the
-            // `Multipart` struct, we ensure the length of the output is valid for use here.
+            // `Multipart` struct, we ensure the length of the output is valid for use here. We
+            // verify above that `self.output_len` is correct for this pointer.
             sodium::crypto_generichash_blake2b_final(
                 self.state.as_mut(),
-                self.output.as_mut_ptr(),
-                self.output.len(),
+                output.as_mut_ptr(),
+                self.output_len,
             );
         }
+
+        Ok(())
     }
 }
 
-impl<'o> Drop for Multipart<'o> {
+impl Drop for Multipart {
     fn drop(&mut self) {
         unsafe {
             // SAFETY:

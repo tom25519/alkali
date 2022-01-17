@@ -57,10 +57,10 @@
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
 //! custom allocator from Sodium to manage their memory. They can be used like standard array/slice
-//! types, as they implement [`Deref`], [`AsRef`], etc., so anywhere where you might be able to use
-//! a `&[u8]`, a hardened buffer can also be used. The benefit to using these structs over just
-//! using normal arrays/vectors is that they have a number of protections implemented intended to
-//! prevent leakage of their contents via side channels.
+//! types, as they implement `std::ops::Deref`, [`AsRef`], etc., so anywhere where you might be
+//! able to use a `&[u8]`, a hardened buffer can also be used. The benefit to using these structs
+//! over just using normal arrays/vectors is that they have a number of protections implemented
+//! intended to prevent leakage of their contents via side channels.
 //!
 //! When these hardened buffer types are dropped, their memory is securely zeroed, so that secrets
 //! cannot later be recovered from uninitialised memory. This operation is done in such a way that
