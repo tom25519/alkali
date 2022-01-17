@@ -91,9 +91,9 @@
 //! assert_eq!(message.as_bytes(), original_message);
 //! ```
 
-use crate::{hardened_buffer, require_init, AlkaliError};
+use crate::{hardened_buffer, mem, require_init, AlkaliError};
 use libsodium_sys as sodium;
-use std::mem::MaybeUninit;
+use std::marker::PhantomData;
 use std::ptr;
 use thiserror::Error;
 
@@ -228,29 +228,69 @@ pub type Signature = [u8; SIGNATURE_LENGTH];
 ///
 /// This can be used to calculate/verify a signature for a message which is too large to fit into
 /// memory, or where the message is received in portions.
-#[derive(Clone, Copy, Debug)]
-pub struct Multipart(sodium::crypto_sign_ed25519ph_state);
+#[derive(Debug)]
+pub struct Multipart {
+    state: ptr::NonNull<sodium::crypto_sign_ed25519ph_state>,
+    _marker: PhantomData<sodium::crypto_sign_ed25519ph_state>,
+}
 
 impl Multipart {
     /// Create a new instance of the struct.
     pub fn new() -> Result<Self, AlkaliError> {
         require_init()?;
 
-        let mut state_uninit = MaybeUninit::uninit();
         let state = unsafe {
-            // SAFETY: This function initialises a crypto_sign_state struct. It expects a pointer
-            // to a crypto_sign_state struct. We pass a region of memory sufficient to store the
-            // struct as defined in Rust, rather than C. This definition is generated via bindgen,
-            // and as such, is equivalent to the struct in C, so it is correct to use it as an
-            // argument for this function.
-            sodium::crypto_sign_ed25519ph_init(state_uninit.as_mut_ptr());
+            // SAFETY: This call to malloc() will allocate the memory required for a
+            // `crypto_sign_state` type, outside of Rust's memory management. The associated memory
+            // is always freed in the corresponding `drop` call. We never free the memory in any
+            // other place in this struct, and drop can only be called once, so a double-free is
+            // not possible. We never give out a pointer to the allocated memory. See the drop
+            // implementation for more reasoning on safety.
+            let mut state = mem::malloc()?;
 
-            // SAFETY: Following the crypto_sign_init call, the struct is correctly initialised, so
-            // it is safe to assume its initialised state.
-            state_uninit.assume_init()
+            // SAFETY: This function initialises `crypto_sign_state` struct. The first argument
+            // should be a pointer to a region of memory sufficient to store a crypto_sign_state
+            // struct. We pass a pointer to a region of memory sufficient to store the struct as
+            // defined in Rust, rather than C. This definition is generated via bindgen, and as
+            // such, is equivalent to the struct in C, so it is correct to it is as an argument for
+            // this function.
+            sodium::crypto_sign_ed25519ph_init(state.as_mut());
+
+            // The state is now initialised correctly.
+            state
         };
 
-        Ok(Self(state))
+        Ok(Self {
+            state,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Create a new instance of the struct, in the same state as this one.
+    pub fn try_clone(&self) -> Result<Self, AlkaliError> {
+        let state = unsafe {
+            // SAFETY: This call to malloc() will allocate the memory required for a
+            // `crypto_sign_state` type, outside of Rust's memory management. The associated memory
+            // is always freed in the corresponding `drop` call. We never free the memory in any
+            // other place in this struct, and drop can only be called once, so a double-free is
+            // not possible. We never give out a pointer to the allocated memory. See the drop
+            // implementation for more reasoning on safety.
+            let mut state = mem::malloc()?;
+
+            // SAFETY: We have called `malloc` to allocate sufficient space for one
+            // `crypto_sign_state` struct at each of the two pointers used here, so both are valid
+            // for reads/writes of `size_of::<crypto_sign_state>` bytes. We have just allocated a
+            // fresh region of memory for `state`, so it definitely doesn't overlap with
+            // `self.state`.
+            ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
+
+            state
+        };
+
+        Ok(Self {
+            state,
+            _marker: PhantomData,
+        })
     }
 
     /// Add message contents to be signed/verified.
@@ -264,7 +304,7 @@ impl Multipart {
             // it is in the right state to call crypto_sign_update. We use chunk.len() as the third
             // argument, so it is definitely the correct length for the chunk.
             sodium::crypto_sign_ed25519ph_update(
-                &mut self.0,
+                self.state.as_mut(),
                 chunk.as_ptr(),
                 chunk.len() as libc::c_ulonglong,
             );
@@ -291,7 +331,7 @@ impl Multipart {
             // this pointer is NULL, so this is safe. The PrivateKey type is defined to store
             // crypto_sign_SECRETKEYBYTES, so it is suitable for use with this function.
             sodium::crypto_sign_ed25519ph_final_create(
-                &mut self.0,
+                self.state.as_mut(),
                 signature.as_mut_ptr(),
                 ptr::null::<libc::c_ulonglong>() as *mut libc::c_ulonglong,
                 private_key.inner() as *const libc::c_uchar,
@@ -322,7 +362,7 @@ impl Multipart {
             // for a signature. The PublicKey type is defined to store crypto_sign_PUBLICKEYBYTES,
             // so it is suitable for use with this function.
             sodium::crypto_sign_ed25519ph_final_verify(
-                &mut self.0,
+                self.state.as_mut(),
                 signature.as_ptr(),
                 public_key.as_ptr(),
             )
@@ -332,6 +372,30 @@ impl Multipart {
             Ok(())
         } else {
             Err(SignError::InvalidSignature.into())
+        }
+    }
+}
+
+impl Drop for Multipart {
+    fn drop(&mut self) {
+        unsafe {
+            // SAFETY:
+            // * Is a double-free possible in safe code?
+            //   * No: We only free in `drop`, which cannot be called manually, and is called
+            //     exactly once when the struct is actually dropped. Once the value is dropped,
+            //     there's no way to call the method again to cause a double free.
+            // * Is a use-after-free possible in safe code?
+            //   * No: We only ever free a buffer on drop, and after drop, none of the type's
+            //     methods are accessible.
+            // * Is a memory leak possible in safe code?
+            //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
+            //     `std::mem::forget`, the destructor will not be called even though the struct is
+            //     dropped. However, it is documented that in these cases heap memory may be
+            //     leaked, so this is expected behaviour. In addition, certain signal interrupts or
+            //     using panic=abort behaviour will mean the destructor is not called. There's
+            //     little we can do about this, but a failure to free is probably reasonable in
+            //     such cases. In any other case, `drop` will be called, and the memory freed.
+            mem::free(self.state);
         }
     }
 }

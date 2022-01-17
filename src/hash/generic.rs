@@ -89,9 +89,9 @@
 
 // TODO: Consider how/if we wish to expose the salt/personalisation parameters of the hash.
 
-use crate::{hardened_buffer, require_init, AlkaliError};
+use crate::{hardened_buffer, mem, require_init, AlkaliError};
 use libsodium_sys as sodium;
-use std::mem::MaybeUninit;
+use std::marker::PhantomData;
 use std::ptr;
 use thiserror::Error;
 
@@ -201,7 +201,8 @@ pub type Digest = [u8; DIGEST_LENGTH_DEFAULT];
 #[derive(Debug)]
 pub struct Multipart<'o> {
     output: &'o mut [u8],
-    state: sodium::crypto_generichash_blake2b_state,
+    state: ptr::NonNull<sodium::crypto_generichash_blake2b_state>,
+    _marker: PhantomData<sodium::crypto_generichash_blake2b_state>,
 }
 
 impl<'o> Multipart<'o> {
@@ -217,8 +218,15 @@ impl<'o> Multipart<'o> {
             return Err(GenericHashError::DigestLengthInvalid.into());
         }
 
-        let mut state_uninit = MaybeUninit::uninit();
         let state = unsafe {
+            // SAFETY: This call to malloc() will allocate the memory required for a
+            // `crypto_generichash_state` type, outside of Rust's memory management. The associated
+            // memory is always freed in the corresponding `drop` call. We never free the memory in
+            // any other place in this struct, and drop can only be called once, so a double-free
+            // is not possible. We never give out a pointer to the allocated memory. See the drop
+            // implementation for more reasoning on safety.
+            let mut state = mem::malloc()?;
+
             // SAFETY: This function initialises a `crypto_generichash_blake2b_state` struct. The
             // first argument should be a pointer to a crypto_generichash_blake2b_state struct. We
             // pass a pointer to a region of memory sufficient to store the struct as defined in
@@ -230,18 +238,20 @@ impl<'o> Multipart<'o> {
             // behaviour here. The final argument is the desired length of the hash output. We use
             // `output.len()`, which we have ensured is acceptable above.
             sodium::crypto_generichash_blake2b_init(
-                state_uninit.as_mut_ptr(),
+                state.as_mut(),
                 ptr::null::<libc::c_uchar>(),
                 0,
                 output.len(),
             );
 
-            // SAFETY: Following the crypto_generichash_blake2b_init call, the struct is correctly
-            // initialised, so it is safe to assume its initialised state.
-            state_uninit.assume_init()
+            state
         };
 
-        Ok(Self { state, output })
+        Ok(Self {
+            state,
+            output,
+            _marker: PhantomData,
+        })
     }
 
     /// Create a new instance of the struct, using the provided key in the hash calculation.
@@ -264,8 +274,15 @@ impl<'o> Multipart<'o> {
             return Err(GenericHashError::DigestLengthInvalid.into());
         }
 
-        let mut state_uninit = MaybeUninit::uninit();
         let state = unsafe {
+            // SAFETY: This call to malloc() will allocate the memory required for a
+            // `crypto_generichash_state` type, outside of Rust's memory management. The associated
+            // memory is always freed in the corresponding `drop` call. We never free the memory in
+            // any other place in this struct, and drop can only be called once, so a double-free
+            // is not possible. We never give out a pointer to the allocated memory. See the drop
+            // implementation for more reasoning on safety.
+            let mut state = mem::malloc()?;
+
             // SAFETY: This function initialises a `crypto_generichash_blake2b_state` struct. The
             // first argument should be a pointer to a crypto_generichash_blake2b_state struct. We
             // pass a pointer to a region of memory sufficient to store the struct as defined in
@@ -277,18 +294,21 @@ impl<'o> Multipart<'o> {
             // desired length of the hash output. We use `output.len()`, which we have ensured is
             // acceptable above.
             sodium::crypto_generichash_blake2b_init(
-                state_uninit.as_mut_ptr(),
+                state.as_mut(),
                 key.inner() as *const libc::c_uchar,
                 key.len(),
                 output.len(),
             );
 
-            // SAFETY: Following the crypto_generichash_blake2b_init call, the struct is correctly
-            // initialised, so it is safe to assume its initialised state.
-            state_uninit.assume_init()
+            // The state is now initialised correctly.
+            state
         };
 
-        Ok(Self { state, output })
+        Ok(Self {
+            state,
+            output,
+            _marker: PhantomData,
+        })
     }
 
     /// Add message contents to hash.
@@ -303,7 +323,7 @@ impl<'o> Multipart<'o> {
             // portion of the message to write, and its length. We use `chunk.len()` to specify the
             // length of the message, so it is correct here.
             sodium::crypto_generichash_blake2b_update(
-                &mut self.state,
+                self.state.as_mut(),
                 chunk.as_ptr(),
                 chunk.len() as libc::c_ulonglong,
             );
@@ -325,10 +345,34 @@ impl<'o> Multipart<'o> {
             // destination to which the hash should be written. In the initialisation of the
             // `Multipart` struct, we ensure the length of the output is valid for use here.
             sodium::crypto_generichash_blake2b_final(
-                &mut self.state,
+                self.state.as_mut(),
                 self.output.as_mut_ptr(),
                 self.output.len(),
             );
+        }
+    }
+}
+
+impl<'o> Drop for Multipart<'o> {
+    fn drop(&mut self) {
+        unsafe {
+            // SAFETY:
+            // * Is a double-free possible in safe code?
+            //   * No: We only free in `drop`, which cannot be called manually, and is called
+            //     exactly once when the struct is actually dropped. Once the value is dropped,
+            //     there's no way to call the method again to cause a double free.
+            // * Is a use-after-free possible in safe code?
+            //   * No: We only ever free a buffer on drop, and after drop, none of the type's
+            //     methods are accessible.
+            // * Is a memory leak possible in safe code?
+            //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
+            //     `std::mem::forget`, the destructor will not be called even though the struct is
+            //     dropped. However, it is documented that in these cases heap memory may be
+            //     leaked, so this is expected behaviour. In addition, certain signal interrupts or
+            //     using panic=abort behaviour will mean the destructor is not called. There's
+            //     little we can do about this, but a failure to free is probably reasonable in
+            //     such cases. In any other case, `drop` will be called, and the memory freed.
+            mem::free(self.state);
         }
     }
 }

@@ -151,16 +151,27 @@ macro_rules! auth_module {
         ///
         /// This can be used to calculate an authentication tag for a message which is too large to
         /// fit into memory, or where the message is received in portions.
-        #[derive(Clone, Copy, Debug)]
-        pub struct Multipart($mp_state);
+        #[derive(Debug)]
+        pub struct Multipart {
+            state: std::ptr::NonNull<$mp_state>,
+            _marker: std::marker::PhantomData<$mp_state>,
+        }
 
         impl Multipart {
             /// Create a new instance of the struct.
             pub fn new(key: &Key) -> Result<Self, $crate::AlkaliError> {
                 $crate::require_init()?;
 
-                let mut state_uninit = std::mem::MaybeUninit::uninit();
                 let state = unsafe {
+                    // SAFETY: This call to malloc() will allocate the memory required for a
+                    // `crypto_auth_state` type, outside of Rust's memory management. The
+                    // associated memory is always freed in the corresponding `drop` call. We never
+                    // free the memory in any other place in this struct, and drop can only be
+                    // called once, so a double-free is not possible. We never give out a pointer
+                    // to the allocated memory. See the drop implementation for more reasoning on
+                    // safety.
+                    let mut state = $crate::mem::malloc()?;
+
                     // SAFETY: This function initialises a crypto_auth_state struct. It expects a
                     // pointer to a crypto_auth_state struct, a key, and the length of the provided
                     // key. For the first argument, we pass a region of memory sufficient to store
@@ -168,14 +179,44 @@ macro_rules! auth_module {
                     // via bindgen, and as such, is equivalent to the struct in C, so it is correct
                     // to use it as an argument for this function. The Key type is defined to have
                     // length equal to KEY_LENGTH.
-                    $mp_init(state_uninit.as_mut_ptr(), key.as_ptr(), KEY_LENGTH);
+                    $mp_init(state.as_mut(), key.as_ptr(), KEY_LENGTH);
 
-                    // SAFETY: Following the crypto_auth_init call, the struct is correctly
-                    // initialised, so it is safe to assume its initialised state.
-                    state_uninit.assume_init()
+                    // The state is now initialised correctly.
+                    state
                 };
 
-                Ok(Self(state))
+                Ok(Self {
+                    state,
+                    _marker: std::marker::PhantomData,
+                })
+            }
+
+            /// Create a new instance of the struct, in the same state as this one.
+            pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
+                let state = unsafe {
+                    // SAFETY: This call to malloc() will allocate the memory required for a
+                    // `crypto_auth_state` type, outside of Rust's memory management. The
+                    // associated memory is always freed in the corresponding `drop` call. We never
+                    // free the memory in any other place in this struct, and drop can only be
+                    // called once, so a double-free is not possible. We never give out a pointer
+                    // to the allocated memory. See the drop implementation for more reasoning on
+                    // safety.
+                    let mut state = $crate::mem::malloc()?;
+
+                    // SAFETY: We have called `malloc` to allocate sufficient space for one
+                    // `crypto_auth_state` struct at each of the two pointers used here, so both
+                    // are valid for reads/writes of `size_of::<crypto_auth_state>` bytes. We have
+                    // just allocated a fresh region of memory for `state`, so it definitely
+                    // doesn't overlap with `self.state`.
+                    std::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
+
+                    state
+                };
+
+                Ok(Self {
+                    state,
+                    _marker: std::marker::PhantomData,
+                })
             }
 
             /// Add message contents to be authenticated.
@@ -190,7 +231,7 @@ macro_rules! auth_module {
                     // call crypto_auth_update. We use chunk.len() as the third argument, so it is
                     // definitely the correct length for the chunk.
                     $mp_update(
-                        &mut self.0,
+                        self.state.as_mut(),
                         chunk.as_ptr(),
                         chunk.len() as libc::c_ulonglong,
                     );
@@ -211,7 +252,7 @@ macro_rules! auth_module {
                     // struct, so it is in the right state to call crypto_auth_final. The tag array
                     // here has been defined to be crypto_auth_BYTES bytes long, so it is of the
                     // correct size to write an auth tag to.
-                    $mp_final(&mut self.0, tag.as_mut_ptr());
+                    $mp_final(self.state.as_mut(), tag.as_mut_ptr());
                 }
                 tag
             }
@@ -234,7 +275,7 @@ macro_rules! auth_module {
                     // struct, so it is in the right state to call crypto_auth_final. The
                     // actual_tag array here has been defined to be crypto_auth_BYTES bytes long,
                     // so it is of the correct size to write an auth tag to.
-                    $mp_final(&mut self.0, actual_tag.as_mut_ptr());
+                    $mp_final(self.state.as_mut(), actual_tag.as_mut_ptr());
 
                     // SAFETY: This function takes two pointers, and a length. The two pointers
                     // will be compared over length bytes for equality. The Tag type here is
@@ -251,6 +292,32 @@ macro_rules! auth_module {
                     Ok(())
                 } else {
                     Err($crate::symmetric::auth::AuthError::AuthenticationFailed.into())
+                }
+            }
+        }
+
+        impl Drop for Multipart {
+            fn drop(&mut self) {
+                unsafe {
+                    // SAFETY:
+                    // * Is a double-free possible in safe code?
+                    //   * No: We only free in `drop`, which cannot be called manually, and is
+                    //     called exactly once when the struct is actually dropped. Once the value
+                    //     is dropped, there's no way to call the method again to cause a double
+                    //     free.
+                    // * Is a use-after-free possible in safe code?
+                    //   * No: We only ever free a buffer on drop, and after drop, none of the
+                    //     type's methods are accessible.
+                    // * Is a memory leak possible in safe code?
+                    //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
+                    //     `std::mem::forget`, the destructor will not be called even though the
+                    //     struct is dropped. However, it is documented that in these cases heap
+                    //     memory may be leaked, so this is expected behaviour. In addition,
+                    //     certain signal interrupts or using panic=abort behaviour will mean the
+                    //     destructor is not called. There's little we can do about this, but a
+                    //     failure to free is probably reasonable in such cases. In any other case,
+                    //     `drop` will be called, and the memory freed.
+                    $crate::mem::free(self.state);
                 }
             }
         }

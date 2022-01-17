@@ -91,29 +91,70 @@ macro_rules! sha2_module {
         ///
         /// This can be used to calculate the hash of a message which is too large to fit into
         /// memory, or where the message is received in portions.
-        pub struct Multipart($mp_state);
+        pub struct Multipart {
+            state: std::ptr::NonNull<$mp_state>,
+            _marker: std::marker::PhantomData<$mp_state>,
+        }
 
         impl Multipart {
             /// Create a new instance of the struct.
             pub fn new() -> Result<Self, $crate::AlkaliError> {
                 $crate::require_init()?;
 
-                let mut state_uninit = std::mem::MaybeUninit::uninit();
                 let state = unsafe {
+                    // SAFETY: This call to malloc() will allocate the memory required for a
+                    // `crypto_hash_state` type, outside of Rust's memory management. The
+                    // associated memory is always freed in the corresponding `drop` call. We never
+                    // free the memory in any other place in this struct, and drop can only be
+                    // called once, so a double-free is not possible. We never give out a pointer
+                    // to the allocated memory. See the drop implementation for more reasoning on
+                    // safety.
+                    let mut state = $crate::mem::malloc()?;
+
                     // SAFETY: This function initialises a `crypto_hash_state` struct. It expects a
                     // pointer to a region of memory sufficient to store a crypto_auth_state
                     // struct. We pass a region of memory sufficient to store the struct as defined
                     // in Rust, rather than C. This definition is generated via bindgen, and as
                     // such, is equivalent to the struct in C, so it is correct to use as an
                     // argument for this function.
-                    $mp_init(state_uninit.as_mut_ptr());
+                    $mp_init(state.as_mut());
 
-                    // SAFETY: Following the crypto_hash_init call, the struct is correctly
-                    // initialised, so it is safe to assume its initialised state.
-                    state_uninit.assume_init()
+                    // The state is now initialised correctly.
+                    state
                 };
 
-                Ok(Self(state))
+                Ok(Self {
+                    state,
+                    _marker: std::marker::PhantomData,
+                })
+            }
+
+            /// Create a new instance of the struct, in the same state as this one.
+            pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
+                let state = unsafe {
+                    // SAFETY: This call to malloc() will allocate the memory required for a
+                    // `crypto_hash_state` type, outside of Rust's memory management. The
+                    // associated memory is always freed in the corresponding `drop` call. We never
+                    // free the memory in any other place in this struct, and drop can only be
+                    // called once, so a double-free is not possible. We never give out a pointer
+                    // to the allocated memory. See the drop implementation for more reasoning on
+                    // safety.
+                    let mut state = $crate::mem::malloc()?;
+
+                    // SAFETY: We have callled `malloc` to allocate sufficient space for one
+                    // `crypto_hash_state` struct at each of the two pointers used here, so both
+                    // are valid for reads/writes of `size_of::<crypto_hash_state>` bytes. We have
+                    // just allocated a fresh region of memory for `state`, so it definitely
+                    // doesn't overlap with `self.state`.
+                    std::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
+
+                    state
+                };
+
+                Ok(Self {
+                    state,
+                    _marker: std::marker::PhantomData,
+                })
             }
 
             /// Add message contents to hash.
@@ -126,7 +167,7 @@ macro_rules! sha2_module {
                     // write, and its length. We use `chunk.len()` to specify the length of the
                     // chunk, so it is correct for this pointer.
                     $mp_update(
-                        &mut self.0,
+                        self.state.as_mut(),
                         chunk.as_ptr(),
                         chunk.len() as libc::c_ulonglong,
                     );
@@ -143,9 +184,35 @@ macro_rules! sha2_module {
                     // this function. The next argument specifies the destination to which the
                     // calculated hash should be written. We have defined `digest` to be
                     // `crypto_hash_BYTES`, so it is the correct size for use with this function.
-                    $mp_final(&mut self.0, digest.as_mut_ptr());
+                    $mp_final(self.state.as_mut(), digest.as_mut_ptr());
                 }
                 digest
+            }
+        }
+
+        impl Drop for Multipart {
+            fn drop(&mut self) {
+                unsafe {
+                    // SAFETY:
+                    // * Is a double-free possible in safe code?
+                    //   * No: We only free in `drop`, which cannot be called manually, and is
+                    //     called exactly once when the struct is actually dropped. Once the value
+                    //     is dropped, there's no way to call the method again to cause a double
+                    //     free.
+                    // * Is a use-after-free possible in safe code?
+                    //   * No: We only ever free a buffer on drop, and after drop, none of the
+                    //     type's methods are accessible.
+                    // * Is a memory leak possible in safe code?
+                    //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
+                    //     `std::mem::forget`, the destructor will not be called even though the
+                    //     struct is dropped. However, it is documented that in these cases heap
+                    //     memory may be leaked, so this is expected behaviour. In addition,
+                    //     certain signal interrupts or using panic=abort behaviour will mean the
+                    //     destructor is not called. There's little we can do about this, but a
+                    //     failure to free is probably reasonable in such cases. In any other case,
+                    //     `drop` will be called, and the memory freed.
+                    $crate::mem::free(self.state);
+                }
             }
         }
 
