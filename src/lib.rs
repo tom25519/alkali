@@ -29,6 +29,11 @@
 //! * Encrypt a message, so that specific trusted parties, with whom I already share a secret key,
 //!   can decrypt it
 //!     * Use [`symmetric::cipher`]
+//! * Encrypt a sequence of messages in order, so that the decrypting party no messages have been
+//!   removed, reordered, etc.
+//!     * Use [`symmetric::cipher_stream`]
+//! * Encrypt an arbitrarily-long file
+//!     * Use [`symmetric::cipher_stream`]
 //! * Produce a signature for a message, so that anyone can verify I sent it
 //!     * Use [`asymmetric::sign`]
 //! * Produce an authentication tag for a message, so that specific trusted parties, with whom I
