@@ -1,4 +1,4 @@
-//! Key exchange.
+//! [Key exchange](https://en.wikipedia.org/wiki/Key_exchange).
 //!
 //! This module corresponds to the [`crypto_kx` API](https://doc.libsodium.org/key_exchange) from
 //! Sodium.

@@ -77,6 +77,9 @@
 //! assert_eq!(&plaintext2, message2);
 //! assert_eq!(&plaintext3, message3);
 //! ```
+//!
+//! File encryption: See
+//! [`examples/file-encryption.rs`](https://github.com/tom25519/alkali/blob/main/examples/file-encryption.rs)
 
 use crate::{hardened_buffer, mem, require_init, AlkaliError};
 use libsodium_sys as sodium;

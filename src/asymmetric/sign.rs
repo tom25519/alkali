@@ -1,4 +1,5 @@
-//! Cryptographic signatures (asymmetric message authentication).
+//! [Cryptographic signatures](https://en.wikipedia.org/wiki/Digital_signature) (asymmetric message
+//! authentication).
 //!
 //! This module corresponds to the [`crypto_sign`
 //! API](https://doc.libsodium.org/public-key_cryptography/public-key_signatures) from Sodium.

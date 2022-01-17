@@ -6,7 +6,7 @@
 //! Being able to unpredictably generate random data is vital to cryptography. This module provides
 //! utilities to generate such random data. By default, random data is sourced from the platform's
 //! secure RNG API (e.g: /dev/urandom), but [`fill_random_from_seed`] can be used for deterministic
-//! pseudo-random number generation.
+//! pseudo-random number generation if this is required for testing purposes.
 //!
 //! # Examples
 //! Using the [rand](https://rust-random.github.io/book)-compatible API:
@@ -74,12 +74,17 @@ pub enum RandomError {
     #[error("too much random data requested for given seed")]
     SeedExhausted,
 
-    /// Tried to call [`random_u32_in_range`] with `low` >= `high`.
+    /// Tried to call [`random_u32_in_range`] with `low` > `high`.
     #[error("the lower bound for random_u32_in_range must be lower than the upper bound")]
     InvalidBounds,
 }
 
 /// [rand](https://rust-random.github.io/book)-compatible CSPRNG API.
+///
+/// The `rand` crate exposes a number of utilities for random number generation, and is especially
+/// useful for sampling values which conform to a specific distribution. This struct implements the
+/// `RngCore` trait, allowing it to be used as a source of randomness for `rand`. It will
+/// automatically implement the wider `Rng` trait if this is imported.
 #[derive(Clone, Copy, Debug)]
 pub struct SodiumRng;
 
@@ -181,7 +186,7 @@ pub fn fill_random_from_seed(buf: &mut [u8], seed: &Seed) -> Result<usize, Alkal
         // SAFETY: `randombytes_buf_deterministic` takes three arguments, `buf`, `size`, and
         // `seed`. It writes `size` bytes of random data, starting at the pointer `buf`, generated
         // using the seed `seed`. Here, we specify `buf.len()` as size, and `buf` as the pointer to
-        // hwich the data should be written, so there is definitely sufficient space allocated to
+        // which the data should be written, so there is definitely sufficient space allocated to
         // write the data. Furthermore, the `Seed` type we have specified as an argument to this
         // function has been defined so as to be the expected size for use with
         // `randombytes_buf_deterministic`. Therefore, this function call is safe as long as Sodium

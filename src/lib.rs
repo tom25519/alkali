@@ -4,10 +4,10 @@
 //! Safe, idiomatic Rust bindings to the [Sodium](https://libsodium.org) cryptographic library.
 //!
 //! Sodium is a fast, modern cryptographic library written in C. This crate intends to provide a
-//! higher-level API for making use of the constructs Sodium provides. These constructs include
-//! simple-to-use symmetric and asymmetric AEAD, signatures, hashing, password derivation, and key
-//! exchange: In short, the majority of operations required for most modern cryptographic
-//! protocols.
+//! higher-level API for making use of the cryptographic constructions Sodium provides. These
+//! constructions include simple-to-use symmetric and asymmetric authenticated encryption,
+//! signatures, hashing, password derivation, and key exchange: In short, the majority of
+//! operations required for many modern cryptographic protocols.
 //!
 //! The intention for this library is to be a spiritual successor to
 //! [sodiumoxide](https://github.com/sodiumoxide/sodiumoxide), which is now deprecated. Lots of
@@ -17,8 +17,8 @@
 //! The cryptographic operations in this crate are mostly split into two main modules:
 //! [`symmetric`] and [`asymmetric`]. Symmetric (sometimes called secret-key) operations use a
 //! single secret key, shared between every party to a communication. In asymmetric (public-key)
-//! operations, every party has its own secret key, which is used to derive a public-key, which is
-//! shared with all other parties. Parties need to know each others' public keys to communicate.
+//! operations, every party has their own secret key, used to derive a public-key which is shared
+//! with all other parties. Parties need to know each others' public keys to communicate.
 //!
 //! There are also hashing algorithms available in the [`hash`] module, and tools for
 //! cryptographically-secure pseudo-random number generation in the [`random`] module.
@@ -29,10 +29,10 @@
 //! * Encrypt a message, so that specific trusted parties, with whom I already share a secret key,
 //!   can decrypt it
 //!     * Use [`symmetric::cipher`]
-//! * Encrypt a sequence of messages in order, so that the decrypting party no messages have been
-//!   removed, reordered, etc.
+//! * Encrypt a sequence of messages in order, so that the decrypting party can verify no messages
+//!   have been removed, reordered, etc.
 //!     * Use [`symmetric::cipher_stream`]
-//! * Encrypt an arbitrarily-long file
+//! * Encrypt an arbitrarily-long data stream, such as a file
 //!     * Use [`symmetric::cipher_stream`]
 //! * Produce a signature for a message, so that anyone can verify I sent it
 //!     * Use [`asymmetric::sign`]
@@ -47,7 +47,7 @@
 //!     * Use [`hash::generic`]
 //! * Establish a secret key with another party over an insecure channel
 //!     * Use [`asymmetric::kx`]
-//! * Calculate a hash for use in a hash table/bloom filter
+//! * Calculate a hash for use in a hash table/bloom filter/etc.
 //!     * Use [`hash::short`]
 //! * Derive multiple subkeys from a single high-entropy key
 //!     * Use [`hash::kdf`]
@@ -56,10 +56,20 @@
 //!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
-//! custom allocator from Sodium to manage their memory. These types have a number of protections
-//! intended to prevent leakage of their contents. They are stored in memory locked regions, which
-//! won't be swapped to disk, and will be securely zeroed on drop. Measures are also taken (guard
-//! pages, canaries) to detect buffer overflows.
+//! custom allocator from Sodium to manage their memory. They can be used like standard array/slice
+//! types, as they implement [`Deref`], [`AsRef`], etc., so anywhere where you might be able to use
+//! a `&[u8]`, a hardened buffer can also be used. The benefit to using these structs over just
+//! using normal arrays/vectors is that they have a number of protections implemented intended to
+//! prevent leakage of their contents via side channels.
+//!
+//! When these hardened buffer types are dropped, their memory is securely zeroed, so that secrets
+//! cannot later be recovered from uninitialised memory. This operation is done in such a way that
+//! the compiler will not remove it during optimisation. Memory for these types is allocated at the
+//! end of a page, immediately followed by a guard page, so any buffer overflow should be
+//! immediately detected and prevented. A canary is also placed before the allocated memory region
+//! to detect potential overflows, and another guard page is placed before the canary. The entire
+//! region is "locked", which advises the operating system not to swap it to disk if it would
+//! normally do so, and not to include the memory contents in crash reports/core dumps.
 //!
 //! In the future, we should be able to use the [Allocator
 //! API](https://doc.rust-lang.org/std/alloc/trait.Allocator.html) to simplify these types, but for
@@ -93,13 +103,16 @@ pub enum AlkaliError {
     ///
     /// This could indicate a number of possible issues. In the worst case, it indicates a buffer
     /// overflow or similar error occurred and was detected by Sodium, but it could also indicate
-    /// any other reason secure memory allocation may fail.
+    /// any other reason secure memory allocation may fail. Sodium's allocator is less likely to
+    /// succeed in general than the standard operating system allocator, since there are limits
+    /// placed on how much memory can be locked, etc.
     #[error("memory management error")]
     MemoryManagement,
 
     /// Tried to create a hardened buffer from an incorrectly sized slice.
     ///
-    /// The 0th item is the expected length, the 1st item is the actual length of the slice.
+    /// The 0th item is the expected length of a slice from which this buffer can be initialised,
+    /// the 1st item is the actual length of the slice that was provided.
     #[error("incorrect slice length: expected {0}, found {1}")]
     IncorrectSliceLength(usize, usize),
 
@@ -177,7 +190,15 @@ macro_rules! hardened_buffer {
                         // alignment issues. See the drop implementation for more reasoning on
                         // safety.
                         let ptr = $crate::mem::malloc()?;
+
+                        // SAFETY: This call to memzero will clear the memory pointed to by `ptr`.
+                        // The `memzero::<T>` function clears an amount of memory equal to the size
+                        // of the `T`. Since the `malloc` call above succeeded, `ptr` points to
+                        // sufficient memory to store a `[u8; $size]`, so `memzero::<[u8; $size]>`
+                        // is valid here. Any memory value can be a valid representation of this
+                        // type, so zeroing the memory is valid.
                         $crate::mem::memzero(ptr)?;
+
                         ptr
                     };
 
@@ -189,6 +210,9 @@ macro_rules! hardened_buffer {
 
                 /// Safely zero the contents of the buffer, in such a way that the compiler will
                 /// not optimise away the operation.
+                ///
+                /// This is automatically done when the buffer is dropped, but you may wish to do
+                /// this as soon as the buffer is no longer required.
                 pub fn zero(&mut self) -> Result<(), $crate::AlkaliError> {
                     $crate::require_init()?;
 
@@ -263,7 +287,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::convert::TryFrom<&[u8]> for $name {
+            impl TryFrom<&[u8]> for $name {
                 type Error = $crate::AlkaliError;
 
                 fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {

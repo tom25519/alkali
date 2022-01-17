@@ -1,4 +1,5 @@
-//! Symmetric message authentication (HMAC).
+//! Symmetric [message authentication](https://en.wikipedia.org/wiki/Message_authentication)
+//! (HMAC).
 //!
 //! This module corresponds to the [`crypto_auth`
 //! API](https://doc.libsodium.org/secret-key_cryptography/secret-key_authentication) from Sodium.
