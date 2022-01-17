@@ -134,6 +134,10 @@ pub enum AlkaliError {
     #[error("symmetric cipher error")]
     SymmetricCipherError(#[from] symmetric::cipher::CipherError),
 
+    /// An error occurred in the [`symmetric::cipher_stream`] module.
+    #[error("symmetric cipher stream error")]
+    CipherStreamError(#[from] symmetric::cipher_stream::CipherStreamError),
+
     /// An error occurred in the [`symmetric::one_time_auth`] module.
     #[error("one-time authentication error")]
     OneTimeAuthError(#[from] symmetric::one_time_auth::OneTimeAuthError),
@@ -156,7 +160,7 @@ macro_rules! hardened_buffer {
                 pub fn new_empty() -> Result<Self, $crate::AlkaliError> {
                     $crate::require_init()?;
 
-                    unsafe {
+                    let ptr = unsafe {
                         // SAFETY: This call to malloc() will allocate the memory required for a
                         // [u8; $size] type, outside of Rust's memory management. The associated
                         // memory is always freed in the corresponding `drop` call. We never free
@@ -169,11 +173,13 @@ macro_rules! hardened_buffer {
                         // safety.
                         let ptr = $crate::mem::malloc()?;
                         $crate::mem::memzero(ptr)?;
-                        Ok(Self {
-                            ptr,
-                            _marker: std::marker::PhantomData,
-                        })
-                    }
+                        ptr
+                    };
+
+                    Ok(Self {
+                        ptr,
+                        _marker: std::marker::PhantomData,
+                    })
                 }
 
                 /// Safely zero the contents of the buffer, in such a way that the compiler will

@@ -87,7 +87,8 @@ pub enum CipherError {
     ///
     /// Beyond a certain point, the keystream of the cipher is exhausted, and it can no longer be
     /// used to safely encrypt message contents. Therefore, this error is returned if the message
-    /// provided is too long. Messages can be at most [`struct@MESSAGE_LENGTH_MAX`] bytes.
+    /// provided is too long. Messages can be at most
+    /// [`MESSAGE_LENGTH_MAX`](struct@MESSAGE_LENGTH_MAX) bytes.
     #[error("the message is too long for encryption/decryption with this cipher")]
     MessageTooLong,
 

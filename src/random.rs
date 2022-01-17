@@ -122,7 +122,7 @@ pub fn random_u32() -> Result<u32, AlkaliError> {
 pub fn random_u32_in_range(low: u32, high: u32) -> Result<u32, AlkaliError> {
     require_init()?;
 
-    if low >= high {
+    if low > high {
         return Err(RandomError::InvalidBounds.into());
     }
 
