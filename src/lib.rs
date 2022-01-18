@@ -124,6 +124,10 @@ pub enum AlkaliError {
     #[error("key exchange error")]
     KeyExchangeError(#[from] asymmetric::kx::KeyExchangeError),
 
+    /// An error occurred in the [`asymmetric::repudiable_cipher`] module.
+    #[error("repudiable cipher error")]
+    RepudiableCipherError(#[from] asymmetric::repudiable_cipher::RepudiableCipherError),
+
     /// An error occurred in the [`asymmetric::sign`] module.
     #[error("signing error")]
     SignError(#[from] asymmetric::sign::SignError),
