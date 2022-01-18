@@ -178,6 +178,7 @@ pub fn fill_random_from_seed(buf: &mut [u8], seed: &Seed) -> Result<usize, Alkal
     // We can only safely generate up to 2^38 bytes of pseudo-random data from a given seed. This
     // constraint doesn't apply if we use `randombytes_buf` (unseeded PRNG) since Sodium
     // automatically reseeds the PRNG when required.
+    #[cfg(target_pointer_width = "64")]
     if buf.len() > 0x4000000000 {
         return Err(RandomError::SeedExhausted.into());
     }

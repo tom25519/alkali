@@ -55,7 +55,7 @@
 
 use thiserror::Error;
 
-/// Error type returned if something whent wrong in the `asymmetric::repudiable_cipher` module.
+/// Error type returned if something went wrong in the `asymmetric::repudiable_cipher` module.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum RepudiableCipherError {
     /// The output buffer is too short to store the ciphertext/plaintext which would result from
