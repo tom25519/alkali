@@ -81,6 +81,7 @@ use libsodium_sys as sodium;
 use thiserror::Error;
 
 pub mod asymmetric;
+pub mod encode;
 pub mod hash;
 mod mem;
 pub mod random;
@@ -126,7 +127,7 @@ pub enum AlkaliError {
     /// This could occur if the string contains invalid characters which were not marked to be
     /// ignored, or if the output was insufficient to store the decoded bytes.
     #[error("could not decode provided hex/base64")]
-    DecodeFailed,
+    DecodeError,
 
     /// An error occurred in the [`asymmetric::cipher`] module.
     #[error("asymmetric cipher error")]
