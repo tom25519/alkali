@@ -35,6 +35,7 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v1
       - run: ${{ matrix.deps }}
+        if: ${{ matrix.deps }}
       - run: cargo test --target ${{ matrix.target }}
       - run: cargo test --release --target ${{ matrix.target }}
 

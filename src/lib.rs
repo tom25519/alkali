@@ -116,6 +116,18 @@ pub enum AlkaliError {
     #[error("incorrect slice length: expected {0}, found {1}")]
     IncorrectSliceLength(usize, usize),
 
+    /// The slices supplied to [`util::add_le`], [`util::sub_le`], or [`util::compare_le`] differ
+    /// in length.
+    #[error("numbers differ in length")]
+    NumberLengthsDiffer,
+
+    /// Failed to decode the provided hex/base64 string.
+    ///
+    /// This could occur if the string contains invalid characters which were not marked to be
+    /// ignored, or if the output was insufficient to store the decoded bytes.
+    #[error("could not decode provided hex/base64")]
+    DecodeFailed,
+
     /// An error occurred in the [`asymmetric::cipher`] module.
     #[error("asymmetric cipher error")]
     AsymmetricCipherError(#[from] asymmetric::cipher::CipherError),

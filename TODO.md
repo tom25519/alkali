@@ -2,7 +2,7 @@ APIs to implement:
 * [ ] `crypto_aead`
 * [x] `crypto_auth`
 * [x] `crypto_box`
-* [ ] `crypto_box_seal`
+* [x] `crypto_box_seal`
 * [x] `crypto_generichash`
 * [x] `crypto_hash`
 * [x] `crypto_kdf`
@@ -15,8 +15,8 @@ APIs to implement:
 * [x] `crypto_sign`
 * [ ] `crypto_stream`
 * [x] `randombytes`
-* [ ] hex/base64 conversion
-* [ ] `sodium_memzero`
+* [x] hex/base64 conversion
+* [x] `sodium_memzero`
 * [x] `sodium_memcmp`
-* [ ] `sodium_is_zero`
+* [x] `sodium_is_zero`
 * [ ] padding

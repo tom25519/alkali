@@ -360,7 +360,7 @@ macro_rules! pbkdf_module_common {
         ) -> Result<String, $crate::AlkaliError> {
             $crate::require_init()?;
 
-            let mut out = [5u8; STR_LENGTH_MAX + 1];
+            let mut out = [0u8; STR_LENGTH_MAX + 1];
 
             if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
                 return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
