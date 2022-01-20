@@ -28,18 +28,17 @@ use alkali::symmetric::cipher_stream;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use zeroize::Zeroize;
 
 const CHUNK_SIZE: usize = 4096;
 
 /// Uses a Password-Based Key Derivation Function to derive an encryption key from the provided
 /// password.
-fn derive_key_from_password(password: &str, salt: &pbkdf::Salt) -> cipher_stream::Key {
+fn derive_key_from_password(password: &[u8], salt: &pbkdf::Salt) -> cipher_stream::Key {
     let mut key = cipher_stream::Key::new_empty().unwrap();
 
     println!("Deriving key...");
     pbkdf::derive_key(
-        password.as_bytes(),
+        password,
         &salt,
         pbkdf::OPS_LIMIT_SENSITIVE,
         pbkdf::MEM_LIMIT_SENSITIVE,
@@ -51,7 +50,7 @@ fn derive_key_from_password(password: &str, salt: &pbkdf::Salt) -> cipher_stream
 }
 
 /// Encrypts `source`, writing the result to `dest`, using `password` to derive the encryption key.
-fn encrypt_file<S, D>(source: &S, dest: &D, password: &str)
+fn encrypt_file<S, D>(source: &S, dest: &D, password: &[u8])
 where
     S: AsRef<Path>,
     D: AsRef<Path>,
@@ -98,11 +97,11 @@ where
     }
 
     // Clear the input buffer, which still contains plaintext
-    buf_read.zeroize();
+    alkali::util::clear(&mut buf_read).unwrap();
 }
 
 /// Decrypts `source`, writing the result to `dest`, using `password` to derive the decryption key.
-fn decrypt_file<S, D>(source: &S, dest: &D, password: &str)
+fn decrypt_file<S, D>(source: &S, dest: &D, password: &[u8])
 where
     S: AsRef<Path>,
     D: AsRef<Path>,
@@ -154,7 +153,7 @@ where
     }
 
     // Clear the output buffer, which still contains plaintext
-    buf_write.zeroize();
+    alkali::util::clear(&mut buf_write).unwrap();
 }
 
 fn main() {
@@ -166,7 +165,9 @@ fn main() {
     }
 
     // Ask the user to input a password for encryption
-    let mut password = rpassword::read_password_from_tty(Some("Password: ")).unwrap();
+    let mut password = rpassword::read_password_from_tty(Some("Password: "))
+        .unwrap()
+        .into_bytes();
 
     match args[1].as_str() {
         "encrypt" => encrypt_file(&args[2], &args[3], &password),
@@ -175,5 +176,5 @@ fn main() {
     }
 
     // Clear the password from memory
-    password.zeroize();
+    alkali::util::clear(&mut password).unwrap();
 }

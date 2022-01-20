@@ -20,4 +20,3 @@ thiserror = "1.0.30"
 [dev-dependencies]
 rand = "0.8.4"
 rpassword = "5.0.1"
-zeroize = "1.5.0"
