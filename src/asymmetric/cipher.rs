@@ -46,6 +46,10 @@
 //! of the sender to receive and decrypt messages. If any of these factors are a concern, the
 //! [`crate::asymmetric::repudiable_cipher`] API should be used.
 //!
+//! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
+//! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
+//! decryption via [`util::unpad`](crate::util::unpad).
+//!
 //! # Examples
 //! Generating a random keypair for a sender & receiver, and encrypting/decrypting messages (uses
 //! [`generate_keypair`], [`encrypt`], and [`decrypt`]):

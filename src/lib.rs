@@ -24,8 +24,11 @@
 //! cryptographically-secure pseudo-random number generation in the [`random`] module.
 //!
 //! I want to...
-//! * Encrypt a message for a specific party using their public key
+//! * Encrypt a message for a specific party using their public key, so that they can verify I sent
+//!   it
 //!     * Use [`asymmetric::cipher`]
+//! * Anonymously encrypt a message for a specific party using their public key
+//!     * Use [`asymmetric::repudiable_cipher`]
 //! * Encrypt a message, so that specific trusted parties, with whom I already share a secret key,
 //!   can decrypt it
 //!     * Use [`symmetric::cipher`]
@@ -121,6 +124,19 @@ pub enum AlkaliError {
     /// in length.
     #[error("numbers differ in length")]
     NumberLengthsDiffer,
+
+    /// Could not add padding to the provided buffer.
+    ///
+    /// This should only occur if `blocksize` was set to zero.
+    #[error("failed to pad the provided buffer")]
+    PaddingError,
+
+    /// Could not calculate the unpadded buffer size.
+    ///
+    /// This can occur if `blocksize` was set to zero, or if `buf` does not appear to be correctly
+    /// padded.
+    #[error("failed to unpad the provided buffer")]
+    UnpaddingError,
 
     /// Failed to decode the provided hex/base64 string.
     ///

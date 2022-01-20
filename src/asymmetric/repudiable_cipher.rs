@@ -1,7 +1,7 @@
 //! Anonymised version of [`cipher`](crate::asymmetric::cipher), for asymmetric Authenticated
 //! Encryption (AE).
 //!
-//! This module corresponds to the [`crypto_seal`
+//! This module corresponds to the [`crypto_box_seal`
 //! API](https://doc.libsodium.org/public-key_cryptography/sealed_boxes) from Sodium.
 //!
 //! In the [`cipher`](crate::asymmetric::cipher) module, the receiver must know the sender's public

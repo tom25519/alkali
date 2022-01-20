@@ -172,9 +172,96 @@ pub fn compare_le(a: &[u8], b: &[u8]) -> Result<std::cmp::Ordering, AlkaliError>
     }
 }
 
+/// Add padding to `buf` to extend its length to a multiple of `blocksize`.
+///
+/// `blocksize` must be at least `1`, otherwise an error will be returned.
+///
+/// # Security Considerations
+/// If hiding the length of a plaintext is desired, padding should be applied prior to encryption,
+/// and removed after decryption.
+pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
+    require_init()?;
+
+    if blocksize == 0 {
+        return Err(AlkaliError::PaddingError);
+    }
+
+    let original_len = buf.len();
+
+    // Add `blocksize` zeroes to `buf`: This is the most that could possibly be added via padding
+    buf.resize(original_len + blocksize, 0x00);
+
+    let mut padded_len = 0usize;
+
+    let pad_result = unsafe {
+        // SAFETY: The first argument to this function is the destination to which the padded
+        // length will be written. We just pass a mutable reference to a `usize`, which is the
+        // expected type for this destination. The next argument specifies a pointer to the buffer
+        // to extend. The next argument specifies the unpadded length of `buf`: We obtained
+        // `original_len` above using `buf.len()`, and then increased the size of the buffer, so
+        // `buf` is definitely at least as large as this. The next argument specifies the block
+        // size to pad to. This can be any size. The final argument is the maximum length that the
+        // padded buffer can be, i.e: The amount of storage allocated for `buf`. We use `buf.len()`
+        // to specify this, so this many bytes can definitely be written to `buf`.
+        sodium::sodium_pad(
+            &mut padded_len,
+            buf.as_mut_ptr(),
+            original_len,
+            blocksize,
+            buf.len(),
+        )
+    };
+
+    if pad_result != 0 {
+        return Err(AlkaliError::PaddingError);
+    }
+
+    // Remove any excess zeroes we added when resizing `buf` above
+    buf.truncate(padded_len);
+
+    Ok(())
+}
+
+/// Compute the original, unpadded length of `buf`, and return the slice of `buf` without padding.
+///
+/// `buf` should have been previously padded using [`pad`].
+///
+/// `blocksize` must be at least `1`, otherwise an error will be returned. Returns an error if
+/// `buf` does not appear to be correctly padded.
+///
+/// # Security Considerations
+/// If hiding the length of a plaintext is desired, padding should be applied prior to encryption,
+/// and removed after decryption.
+pub fn unpad(buf: &[u8], blocksize: usize) -> Result<&[u8], AlkaliError> {
+    require_init()?;
+
+    if blocksize == 0 {
+        return Err(AlkaliError::UnpaddingError);
+    }
+
+    let mut unpadded_len = 0;
+
+    let unpad_result = unsafe {
+        // SAFETY: The first argument to this function is the destination to which the unpadded
+        // length will be written. We just pass a mutable reference to a `usize`, which is the
+        // expected type for this destination. The next two arguments specify a pointer to the
+        // buffer for which we should calculate the original length, and its size. We use
+        // `buf.len()` to specify the length, so it is definitely correct for this pointer. The
+        // final argument specifies the block size which `buf` has been padded to, which can be any
+        // value.
+        sodium::sodium_unpad(&mut unpadded_len, buf.as_ptr(), buf.len(), blocksize)
+    };
+
+    if unpad_result != 0 {
+        return Err(AlkaliError::UnpaddingError);
+    }
+
+    Ok(&buf[..unpadded_len])
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{add_le, clear, compare_le, eq, increment_le, is_zero, sub_le};
+    use super::{add_le, clear, compare_le, eq, increment_le, is_zero, pad, sub_le, unpad};
     use crate::{random, AlkaliError};
 
     #[test]
@@ -460,6 +547,23 @@ mod tests {
             };
 
             assert!(compare_result * memcmp_result > 0);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn pad_and_unpad() -> Result<(), AlkaliError> {
+        for _ in 0..2000 {
+            let mut buf = vec![0; random::random_u32_in_range(0, 200)? as usize];
+            let buf_clone = buf.clone();
+            let blocksize = random::random_u32_in_range(1, 501)? as usize;
+
+            pad(&mut buf, blocksize)?;
+            assert_eq!(buf.len() % blocksize, 0);
+            assert_eq!(&buf[..buf_clone.len()], &buf_clone);
+
+            assert_eq!(unpad(&buf, blocksize)?, &buf_clone);
         }
 
         Ok(())

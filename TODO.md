@@ -19,4 +19,4 @@ APIs to implement:
 * [x] `sodium_memzero`
 * [x] `sodium_memcmp`
 * [x] `sodium_is_zero`
-* [ ] padding
+* [x] padding

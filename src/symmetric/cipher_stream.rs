@@ -35,6 +35,11 @@
 //! API](https://doc.libsodium.org/secret-key_cryptography/secretstream#algorithm) has more
 //! information on how exactly the stream construction operates.
 //!
+//! # Security Considerations
+//! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
+//! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
+//! decryption via [`util::unpad`](crate::util::unpad).
+//!
 //! # Examples
 //! Stream encryption and decryption:
 //!

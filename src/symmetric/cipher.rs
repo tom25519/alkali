@@ -26,6 +26,10 @@
 //!
 //! Nonces and MACs are not secret values, and can be transmitted in the clear.
 //!
+//! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
+//! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
+//! decryption via [`util::unpad`](crate::util::unpad).
+//!
 //! # Examples
 //! Standard encryption & decryption (uses [`encrypt`] and [`decrypt`]):
 //!
