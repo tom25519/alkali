@@ -391,14 +391,14 @@ macro_rules! pbkdf_module_common {
                 // We need to take a slice up to & including the first nul byte here, to
                 // successfully construct a CString.
                 let hash_len = unsafe {
-                    // SAFETY: This is a binding to the strlen function from the C standard
-                    // library. This function takes a pointer to a C-formatted string (with nul
-                    // byte) as an argument, and returns the (inclusive) length to the nul byte.
-                    // The $pwhash_str function above was used to fill the contents of this buffer,
-                    // which Sodium guarantees with produce a valid C string, including nul byte.
-                    // Therefore, it is safe to use strlen to determine the length of the string,
-                    // including the nul byte.
-                    libc::strlen(out.as_ptr() as *const libc::c_char)
+                    // SAFETY: This is a binding to the strnlen function from the C standard
+                    // library. This function takes a pointer to a C-formatted string (with null
+                    // byte) as an argument, and returns the (inclusive) length to the nul byte, up
+                    // to a provided maximum number of bytes.  The $pwhash_str function above was
+                    // used to fill the contents of this buffer, which Sodium guarantees with
+                    // produce a valid C string, including null byte.  Therefore, it is safe to use
+                    // strnlen to determine the length of the string, including the null byte.
+                    libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
                 };
                 let output_string = std::ffi::CString::new(&out[..hash_len])
                     .unwrap()

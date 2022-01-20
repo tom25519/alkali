@@ -46,13 +46,14 @@ pub mod hex {
                 buf.len(),
             );
 
-            // SAFETY: This is a binding to the strlen function from the C standard library. This
+            // SAFETY: This is a binding to the strnlen function from the C standard library. This
             // function takes a pointer to a C-formatted string (with null byte) as an argument,
-            // and returns the (inclusive) length to the nul byte. The `bin2hex` function above was
-            // used to fill the contents of `out`, which Sodium guarantees will produce a valid C
-            // string, including null byte. Therefore, it is safe to use strlen to determine the
-            // length of the string, including the null byte.
-            libc::strlen(out.as_ptr() as *const libc::c_char)
+            // and returns the (inclusive) length to the nul byte, up to a provided maximum number
+            // of bytes. The `bin2hex` function above was used to fill the contents of `out`, which
+            // Sodium guarantees will produce a valid C string, including null byte. Therefore, it
+            // is safe to use strnlen to determine the length of the string, including the null
+            // byte.
+            libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
         };
 
         let output_string = CString::new(&out[..hex_len])
@@ -301,13 +302,14 @@ pub mod base64 {
                 variant as libc::c_int,
             );
 
-            // SAFETY: This is a binding to the strlen function from the C standard library. This
+            // SAFETY: This is a binding to the strnlen function from the C standard library. This
             // function takes a pointer to a C-formatted string (with null byte) as an argument,
-            // and returns the (inclusive) length to the nul byte. The `bin2base64` function above
-            // was used to fill the contents of `out`, which Sodium guarantees will produce a valid
-            // C string, including null byte. Therefore, it is safe to use strlen to determine the
-            // length of the string, including the null byte.
-            libc::strlen(out.as_ptr() as *const libc::c_char)
+            // and returns the (inclusive) length to the nul byte, up to a provided maximum number
+            // of bytes. The `bin2base64` function above was used to fill the contents of `out`,
+            // which Sodium guarantees will produce a valid C string, including null byte.
+            // Therefore, it is safe to use strnlen to determine the length of the string,
+            // including the null byte.
+            libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
         };
 
         let output_string = CString::new(&out[..base64_len])
