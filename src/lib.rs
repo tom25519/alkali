@@ -463,6 +463,35 @@ macro_rules! hardened_buffer {
 
 pub(crate) use hardened_buffer;
 
+/// Used where Sodium returns an error which we didn't expect.
+///
+/// This indicates the implementation has changed, and is now fallible where it previously always
+/// succeeded, so we need to handle the error individually.
+macro_rules! unexpected_err {
+    ($source:expr) => {
+        panic!(
+            "An unexpected error occurred in `{}`. Please report this bug to \
+            https://github.com/tom25519/alkali/issues.",
+            $source
+        );
+    };
+}
+
+pub(crate) use unexpected_err;
+
+/// Assert than `$result` is not a C-style indicator of error (i.e: ensure it is equal to zero).
+///
+/// Calls `unexpected_err!($source)` if an error did occur.
+macro_rules! assert_not_err {
+    ($result:expr, $source:expr) => {
+        if $result != 0 {
+            $crate::unexpected_err!($source);
+        }
+    };
+}
+
+pub(crate) use assert_not_err;
+
 /// Attempt to initialise Sodium.
 ///
 /// n.b: Crates making use of alkali do not have to call this function, it is only used internally

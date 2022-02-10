@@ -11,7 +11,7 @@ categories = ["api-bindings", "cryptography"]
 
 [dependencies]
 lazy_static = "1.4.0"
-libc = { version = "0.2.112" , default-features = false }
+libc = { version = "0.2.117" , default-features = false }
 libsodium-sys-stable = "1.19.21"
 rand_core = { version = "0.6.3", features = ["std"] }
 thiserror = "1.0.30"

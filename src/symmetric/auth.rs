@@ -9,7 +9,12 @@
 //! message) pair will always produce the same tag. An authentication tag can't be calculated
 //! without knowing the key. These properties allow parties with knowledge of the key to verify
 //! that an authentication tag for a given message was created by someone else with access to the
-//! same key. This is often used to verify a message has not been altered.
+//! same key. This is often used to verify a message has not been altered by an attacker or
+//! transmission error.
+//!
+//! If *anyone* should be able to verify the authenticity of messages, rather than just parties with
+//! whom a shared secret key is already established, the
+//! [`asymmetric::sign`](crate::asymmetric::sign) module is best suited for this purpose.
 //!
 //! # Algorithm Details
 //! A [Hash-Based Message Authentication Code](https://en.wikipedia.org/wiki/HMAC) (HMAC) is used
@@ -18,11 +23,21 @@
 //! [HMAC-SHA256](hmacsha256) are also available.
 //!
 //! # Security Considerations
-//! A common, but dangerous, mistake is to try to verify a tag by generating the tag again yourself
-//! via [`authenticate`], and naively comparing the tag you calculate with the other tag. This
-//! opens the door to [timing attacks](https://en.wikipedia.org/wiki/Timing_attack). The [`verify`]
-//! and [`Multipart::verify`] functions use a constant-time comparison between the tags, and should
-//! be used whenever you want to verify a tag, rather than comparing tags yourself.
+//! A common, but dangerous, mistake is to try to verify the authenticity of a message by generating
+//! an authentication tag for the message yourself via [`authenticate`], and naively comparing the
+//! tag you calculate with the tag you received from the message's sender. This opens the door to
+//! [timing attacks](https://en.wikipedia.org/wiki/Timing_attack). The [`verify`] and
+//! [`Multipart::verify`] functions use a constant-time comparison between the tags, and should be
+//! used whenever you want to verify a tag, rather than comparing tags yourself.
+//!
+//! ## Secret Data
+//! * The authentication key ([`Key`]) must only be known to parties who should be able to both
+//!   create and verify tags
+//! * The internal state of the [`Multipart`] struct should be kept secret
+//!
+//! ## Non-Secret Data
+//! * Authentication tags ([`Tag`]) are not sensitive, and do not reveal anything about the content
+//!   of the authenticated message to an outside observer
 //!
 //! # Examples
 //! Generating an authentication tag for a message and verifying the authentication tag is valid
@@ -31,46 +46,67 @@
 //! ```rust
 //! use alkali::symmetric::auth;
 //!
-//! // Generate a new random key to use for authentication
+//! const MESSAGE: &'static str = "Here's a message to authenticate. It can be of any length.";
+//!
+//! // Sender side:
+//!
+//! // Generate a new, random key to use for message authentication. This will need to be shared
+//! // with the message receiver somehow.
 //! let key = auth::Key::generate().unwrap();
-//! let message = "Here's a message we wish to authenticate. It can be of any length.";
-//! let tag = auth::authenticate(message.as_bytes(), &key).unwrap();
+//! // The tag returned by `authenticate` is what proves the message's authenticity, and should be
+//! // transmitted alongside the message.
+//! let tag = auth::authenticate(MESSAGE.as_bytes(), &key).unwrap();
+//!
 //!
 //! // ...
 //!
-//! match auth::verify(message.as_bytes(), &tag, &key) {
+//!
+//! // Receiver side:
+//! // We assume `key` is somehow known to the receiver.
+//!
+//! // The `verify` function checks that `tag` is a valid authentication tag for the message and
+//! // key, thereby proving the message's authenticity. An error is returned if the tag is not valid
+//! // (i.e: the message is inauthentic).
+//! match auth::verify(MESSAGE.as_bytes(), &tag, &key) {
 //!     Ok(_) => println!("Authentication succeeded!"),
 //!     Err(alkali::AlkaliError::AuthError(auth::AuthError::AuthenticationFailed)) => {
 //!         panic!("Uh-oh, message altered!")
 //!     },
-//!     Err(_) => panic!("Some other error ocurred"),
+//!     Err(_) => panic!("Some other error occurred"), // unlikely
 //! }
 //! ```
 //!
-//! If you have an especially long message, or one you're receiving in chunks, it may make more
-//! sense to use the streaming API, which allows you to specify the message to authenticate in
-//! multiple parts (uses [`Multipart`]):
+//! If you have an especially long message, or a message you are transmitting/receiving in chunks,
+//! it may make more sense to use the streaming API, which allows you to specify the message to
+//! authenticate in multiple parts (uses [`Multipart`]):
 //!
 //! ```rust
 //! use alkali::symmetric::auth;
 //!
-//! // Here we specify a pre-existing key, rather than generating a new one (in this case, just 32
-//! // 0xdb bytes, which is obviously not secure).
-//! let key = auth::Key::try_from(&[0xdb; 32]).unwrap();
+//! // Sender side:
+//!
+//! let key = auth::Key::generate().unwrap();
 //! let mut state = auth::Multipart::new(&key).unwrap();
 //! state.update(b"Here's the first part");
 //! state.update(b"... And the second!");
 //! let tag = state.authenticate();
 //!
+//!
 //! // ...
 //!
-//! // Now let's verify the tag we just generated (switching up the chunks we add to the state):
+//!
+//! // Receiver side:
+//! // We assume `key` is somehow known to the receiver.
+//!
+//! // When we verify the message, the contents don't have to be added to the Multipart state in the
+//! // same chunks as we did when the authentication tag was created: Each piece of the message
+//! // added to the state is concatenated in the tag calculation
 //! let mut state = auth::Multipart::new(&key).unwrap();
 //! state.update(b"Here");
 //! state.update(b"'s the first ");
 //! state.update(b"part... And the ");
 //! state.update(b"second!");
-//! assert!(state.verify(&tag).is_ok());
+//! state.verify(&tag).expect("Authentication failed!");
 //! ```
 
 // TODO: The multipart API in Sodium supports variable-length keys. We should consider support for
@@ -83,9 +119,11 @@ use thiserror::Error;
 pub enum AuthError {
     /// Failed to authenticate a message.
     ///
-    /// This may indicate an attempted forgery, a transmission error, or that you're using the
-    /// wrong key. In any case, the authenticity of the message can't be verified, and it should
-    /// not be trusted.
+    /// The provided tag is not correct for this message + key.
+    ///
+    /// This may indicate an attempted forgery, a transmission error, or that you're using a
+    /// different key to the one used by the message sender. In any case, the authenticity of the
+    /// message can't be verified, and it should not be trusted.
     #[error("authentication failed")]
     AuthenticationFailed,
 }
@@ -104,26 +142,31 @@ macro_rules! auth_module {
         $mp_update:path,    // crypto_auth_update
         $mp_final:path,     // crypto_auth_final
     ) => {
-        /// The length of a symmetric key used for message authentication, in bytes.
+        /// The length of a symmetric key for message authentication, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
 
         /// The length of a message authentication tag, in bytes.
         ///
-        /// No matter the length of the input to the auth API, the output tag is of fixed length.
+        /// No matter the length of the message to authenticate, the calculated tag is of this fixed
+        /// length.
         pub const TAG_LENGTH: usize = $tag_len as usize;
 
         $crate::hardened_buffer! {
-            /// Secret key for symmetric message authentication.
+            /// A secret key for symmetric message authentication.
             ///
-            /// There are no technical constraints on the contents of a key, but it should be
-            /// generated randomly using [`Key::generate`].
+            /// There are no *technical* constraints on the contents of a key, but it should be
+            /// indistinguishable from random noise. A random key can be securely generated via
+            /// [`Key::generate`].
             ///
             /// A secret key must not be made public.
             ///
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
-            /// its contents.
-            Key($key_len as usize)
+            /// its contents. This type in particular can be thought of as roughly equivalent to a
+            /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is
+            /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
+            /// [secure memory utilities](https://doc.libsodium.org/memory_management).
+            Key(KEY_LENGTH);
         }
 
         impl Key {
@@ -134,10 +177,13 @@ macro_rules! auth_module {
                 let mut key = Self::new_empty()?;
                 unsafe {
                     // SAFETY: This function expects a pointer to a region of memory sufficient to
-                    // store a key for this algorithm. We have defined this type based on the
-                    // crypto_auth_KEYBYTES constant from Sodium, so it definitely has the correct
-                    // amount of space allocated to store the key. The Key::inner_mut method simply
-                    // gives a mutable pointer to the backing memory.
+                    // store a key for this algorithm. We have defined the `Key` type using the
+                    // `crypto_auth_KEYBYTES` constant from Sodium, so it definitely has the correct
+                    // amount of space allocated to store a key. The `Key::inner_mut` method simply
+                    // returns a mutable pointer to its backing memory. The Sodium documentation
+                    // specifies that `crypto_auth_KEYBYTES` random bytes will be written starting
+                    // at the provided pointer. This is a valid representation of [u8; KEY_LENGTH],
+                    // so `key` is in a valid state following this function call.
                     $keygen(key.inner_mut() as *mut libc::c_uchar);
                 }
                 Ok(key)
@@ -145,12 +191,23 @@ macro_rules! auth_module {
         }
 
         /// An authentication tag for a message.
-        pub type Tag = [u8; TAG_LENGTH as usize];
+        ///
+        /// This authentication tag is what proves the authenticity of a message, so it should be
+        /// transmitted along with the message to be authenticated. Authentication tags are not
+        /// sensitive, and may be transmitted in the clear.
+        pub type Tag = [u8; TAG_LENGTH];
 
         /// Streaming authentication API, for long/multi-part message authentication.
         ///
         /// This can be used to calculate an authentication tag for a message which is too large to
-        /// fit into memory, or where the message is received in portions.
+        /// fit into memory, or where the message is transmitted/received in portions.
+        ///
+        /// The inner state of this struct should not be made public: It can be used to calculate
+        /// authentication tags for the associated key. None of the methods exposed here will reveal
+        /// any of its inner state, so this shouldn't be something that you need to worry about.
+        ///
+        /// This struct uses heap memory while in scope, allocated using Sodium's [secure memory
+        /// utilities](https://doc.libsodium.org/memory_management).
         #[derive(Debug)]
         pub struct Multipart {
             state: std::ptr::NonNull<$mp_state>,
@@ -159,31 +216,57 @@ macro_rules! auth_module {
 
         impl Multipart {
             /// Create a new instance of the struct.
+            ///
+            /// The provided [`Key`] should be the shared symmetric key to use for
+            /// authentication/verification.
             pub fn new(key: &Key) -> Result<Self, $crate::AlkaliError> {
                 $crate::require_init()?;
 
-                let state = unsafe {
+                let mut state = unsafe {
                     // SAFETY: This call to malloc() will allocate the memory required for a
                     // `crypto_auth_state` type, outside of Rust's memory management. The
-                    // associated memory is always freed in the corresponding `drop` call. We never
-                    // free the memory in any other place in this struct, and drop can only be
-                    // called once, so a double-free is not possible. We never give out a pointer
-                    // to the allocated memory. See the drop implementation for more reasoning on
-                    // safety.
-                    let mut state = $crate::mem::malloc()?;
-
-                    // SAFETY: This function initialises a crypto_auth_state struct. It expects a
-                    // pointer to a crypto_auth_state struct, a key, and the length of the provided
-                    // key. For the first argument, we pass a region of memory sufficient to store
-                    // the struct as defined in Rust, rather than C. This definition is generated
-                    // via bindgen, and as such, is equivalent to the struct in C, so it is correct
-                    // to use it as an argument for this function. The Key type is defined to have
-                    // length equal to KEY_LENGTH.
-                    $mp_init(state.as_mut(), key.as_ptr(), KEY_LENGTH);
-
-                    // The state is now initialised correctly.
-                    state
+                    // associated memory is always freed in the corresponding `drop` call for the
+                    // Multipart struct, unless initialisation fails, in which case it is freed
+                    // before `Multipart::new` returns, and not used again. We never free the memory
+                    // in any other place in this struct, and drop can only be called once, so a
+                    // double-free is not possible. We never expose a pointer to the allocated
+                    // memory directly. See the drop implementation for more reasoning on safety.
+                    $crate::mem::malloc()?
                 };
+
+                let init_result = unsafe {
+                    // SAFETY: This function initialises a `crypto_auth_state` struct. It expects a
+                    // pointer to a region of memory sufficient to store such a struct, a key, and
+                    // the length of the provided key. For the first argument, we pass a region of
+                    // memory sufficient to store the struct, allocated above. The type of `state`
+                    // is a `NonNull` pointer, and the unsafe block above will return early if
+                    // allocation failed, so this pointer is valid for use here. The `Key` type is
+                    // defined to have length equal to `crypto_auth_KEYBYTES`, so
+                    // `crypto_auth_KEYBYTES` bytes can be read from the `key` pointer without an
+                    // over-read. Sodium's documentation specifies that after this function is
+                    // called, the memory pointed to by `state` is correctly initialised, and is a
+                    // valid representation of a `crypto_auth_state` struct which can be used with
+                    // other functions from Sodium.
+                    $mp_init(
+                        state.as_mut(),
+                        key.inner() as *const libc::c_uchar,
+                        KEY_LENGTH,
+                    )
+                };
+
+                // This return value is not possible in the current implementation of
+                // `crypto_auth_init` in Sodium, but could be in the future.
+                if init_result != 0 {
+                    unsafe {
+                        // SAFETY: The memory we free here was allocated previously in this function
+                        // using Sodium's allocator, and has not yet been freed, so it is valid to
+                        // free it here. The `unexpected_err!` macro below will always panic, so
+                        // this function will not return, and an instance of `Self` is never
+                        // initialised, preventing a double-free or use-after-free.
+                        $crate::mem::free(state);
+                    }
+                    $crate::unexpected_err!("crypto_auth_init");
+                }
 
                 Ok(Self {
                     state,
@@ -191,23 +274,37 @@ macro_rules! auth_module {
                 })
             }
 
-            /// Create a new instance of the struct, in the same state as this one.
+            /// Try to clone this Multipart state.
+            ///
+            /// This function initialises a new instance of this struct, in the same state as the
+            /// current one, so any data written to be authenticated in the current struct will also
+            /// be used in the authentication tag calculation for the new struct.
+            ///
+            /// The same [`Key`] used to initialise the original [`Multipart`] instance will be used
+            /// to authenticate any data added to the new instance.
             pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
                 let state = unsafe {
                     // SAFETY: This call to malloc() will allocate the memory required for a
                     // `crypto_auth_state` type, outside of Rust's memory management. The
-                    // associated memory is always freed in the corresponding `drop` call. We never
-                    // free the memory in any other place in this struct, and drop can only be
-                    // called once, so a double-free is not possible. We never give out a pointer
-                    // to the allocated memory. See the drop implementation for more reasoning on
-                    // safety.
+                    // associated memory is always freed in the corresponding `drop` call for the
+                    // Multipart struct. We never free the memory in any other place in this struct,
+                    // and drop can only be called once, so a double-free is not possible. We never
+                    // expose a pointer to the allocated memory directly. See the drop
+                    // implementation for more reasoning on safety.
                     let mut state = $crate::mem::malloc()?;
 
                     // SAFETY: We have called `malloc` to allocate sufficient space for one
-                    // `crypto_auth_state` struct at each of the two pointers used here, so both
-                    // are valid for reads/writes of `size_of::<crypto_auth_state>` bytes. We have
-                    // just allocated a fresh region of memory for `state`, so it definitely
-                    // doesn't overlap with `self.state`.
+                    // `crypto_auth_state` struct at each of the two pointers used here:
+                    // `self.state` was allocated in a call to `Self::new`, and `state` was
+                    // allocated above, so both are valid for reads/writes of
+                    // `size_of::<crypto_auth_state>` bytes. We have just allocated a fresh region
+                    // of memory for `state`, so it definitely doesn't overlap with `self.state`. To
+                    // initialise an instance of `Self`, `self.state` must be a valid representation
+                    // of a `crypto_auth_state` struct. No methods within `Self` would cause
+                    // `self.state` to point to an invalid representation of a `crypto_auth_state`
+                    // struct. Therefore, after the copy, `state` must also point to a valid
+                    // representation of a `crypto_auth_state` struct, and can be used with the
+                    // multipart auth functions from Sodium.
                     std::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
 
                     state
@@ -221,43 +318,61 @@ macro_rules! auth_module {
 
             /// Add message contents to be authenticated.
             pub fn update(&mut self, chunk: &[u8]) {
-                unsafe {
-                    // SAFETY: This function takes a pointer to a crypto_auth_state struct, a
+                // We do not use `require_init` here, as it must be called to initialise a
+                // `Multipart` struct.
+
+                let update_result = unsafe {
+                    // SAFETY: This function takes a pointer to a `crypto_auth_state` struct, a
                     // pointer to a chunk of data to add to the auth tag calculation, and the
-                    // length of this data. For the first argument, we pass a crypto_auth_state
-                    // struct, which is defined using bindgen to be equivalent to the definition of
-                    // the equivalent struct in C. The struct must have been initialised in order
-                    // to initialise this Multipart wrapper struct, so it is in the right state to
-                    // call crypto_auth_update. We use chunk.len() as the third argument, so it is
-                    // definitely the correct length for the chunk.
+                    // length of this data. For the first argument, we pass a mutable pointer to a
+                    // `crypto_auth_state` struct. The `Multipart::new` method ensures that the
+                    // `self.state` pointer is correctly initialised and points to a valid
+                    // representation of a `crypto_auth_state` struct. Therefore, it is correct to
+                    // use it with this function. We use chunk.len() as the third argument, so this
+                    // many bytes can definitely be read from `chunk` to be used in the
+                    // authentication tag calculation.
                     $mp_update(
                         self.state.as_mut(),
                         chunk.as_ptr(),
                         chunk.len() as libc::c_ulonglong,
-                    );
-                }
+                    )
+                };
+
+                $crate::assert_not_err!(update_result, "crypto_auth_update");
             }
 
-            /// Calculate an authentication tag for the specified message and key.
+            /// Calculate the authentication tag for the specified message.
             ///
             /// Equivalent to [`authenticate`] for single-part messages.
+            ///
+            /// # Security Considerations
+            /// Do not use this method to *verify* an existing authentication tag for a message, as
+            /// naïve comparison of authentication tags gives rise to a timing attack. Instead, use
+            /// the [`Multipart::verify`] method, which verifies an authentication tag in constant
+            /// time.
             pub fn authenticate(mut self) -> Tag {
+                // We do not use `require_init` here, as it must be called to initialise a
+                // `Multipart` struct.
+
                 let mut tag = [0u8; TAG_LENGTH as usize];
-                unsafe {
-                    // SAFETY: This function takes a pointer to a crypto_auth_state struct and a
+
+                let finalise_result = unsafe {
+                    // SAFETY: This function takes a pointer to a `crypto_auth_state` struct and a
                     // pointer to which the authentication tag will be written. For the first
-                    // argument, we pass a crypto_auth_state struct, which is defined using bindgen
-                    // to be equivalent to the definition of the equivalent struct in C. The struct
-                    // must have been initialised in order to initialise this Multipart wrapper
-                    // struct, so it is in the right state to call crypto_auth_final. The tag array
-                    // here has been defined to be crypto_auth_BYTES bytes long, so it is of the
-                    // correct size to write an auth tag to.
-                    $mp_final(self.state.as_mut(), tag.as_mut_ptr());
-                }
+                    // argument, we pass a mutable pointer to a `crypto_auth_state` struct. The
+                    // `Multipart::new` method ensures that the `self.state` pointer is correctly
+                    // initialised and points to a valid representation of a `crypto_auth_state`
+                    // struct. Therefore, it is correct to use it with this function. The tag array
+                    // here has been defined to be `crypto_auth_BYTES` bytes long, so it is valid
+                    // for writes of the expected size for this function.
+                    $mp_final(self.state.as_mut(), tag.as_mut_ptr())
+                };
+                $crate::assert_not_err!(finalise_result, "crypto_auth_final");
+
                 tag
             }
 
-            /// Verify the provided tag is correct for the specified message and key.
+            /// Verify the provided tag is correct for the specified message.
             ///
             /// Returns an [`AuthError::AuthenticationFailed`](
             /// crate::symmetric::auth::AuthError::AuthenticationFailed) if verification of the
@@ -265,22 +380,29 @@ macro_rules! auth_module {
             ///
             /// Equivalent to [`verify`] for single-part messages.
             pub fn verify(mut self, tag: &Tag) -> Result<(), $crate::AlkaliError> {
-                let mut actual_tag = [0u8; TAG_LENGTH as usize];
-                let verification_result = unsafe {
-                    // SAFETY: This function takes a pointer to a crypto_auth_state struct and a
-                    // pointer to which the authentication tag will be written. For the first
-                    // argument, we pass a crypto_auth_state struct, which is defined using bindgen
-                    // to be equivalent to the definition of the equivalent struct in C. The struct
-                    // must have been initialised in order to initialise this Multipart wrapper
-                    // struct, so it is in the right state to call crypto_auth_final. The
-                    // actual_tag array here has been defined to be crypto_auth_BYTES bytes long,
-                    // so it is of the correct size to write an auth tag to.
-                    $mp_final(self.state.as_mut(), actual_tag.as_mut_ptr());
+                // We do not use `require_init` here, as it must be called to initialise a
+                // `Multipart` struct.
 
+                let mut actual_tag = [0u8; TAG_LENGTH as usize];
+
+                let finalise_result = unsafe {
+                    // SAFETY: This function takes a pointer to a `crypto_auth_state` struct and a
+                    // pointer to which the authentication tag will be written. For the first
+                    // argument, we pass a mutable pointer to a `crypto_auth_state` struct. The
+                    // `Multipart::new` method ensures that the `self.state` pointer is correctly
+                    // initialised and points to a valid representation of a `crypto_auth_state`
+                    // struct. Therefore, it is correct to use it with this function. The
+                    // `actual_tag` array here has been defined to be `crypto_auth_BYTES` bytes
+                    // long, so it is valid for writes of the expected size for this function.
+                    $mp_final(self.state.as_mut(), actual_tag.as_mut_ptr())
+                };
+                $crate::assert_not_err!(finalise_result, "crypto_auth_final");
+
+                let verification_result = unsafe {
                     // SAFETY: This function takes two pointers, and a length. The two pointers
-                    // will be compared over length bytes for equality. The Tag type here is
-                    // defined to be TAG_LENGTH bytes, so both pointers passed to the function
-                    // point to TAG_LENGTH bytes of data.
+                    // will be compared over length bytes for equality. The `Tag` type here is
+                    // defined to be `TAG_LENGTH` bytes, so both pointers passed to the function
+                    // are valid for reads of `TAG_LENGTH` bytes.
                     libsodium_sys::sodium_memcmp(
                         tag.as_ptr() as *const libc::c_void,
                         actual_tag.as_ptr() as *const libc::c_void,
@@ -317,6 +439,8 @@ macro_rules! auth_module {
                     //     destructor is not called. There's little we can do about this, but a
                     //     failure to free is probably reasonable in such cases. In any other case,
                     //     `drop` will be called, and the memory freed.
+                    // `self.state` was allocated in the `Multipart` constructor using Sodium's
+                    // allocator, so it is correct to free it using Sodium's allocator.
                     $crate::mem::free(self.state);
                 }
             }
@@ -324,33 +448,35 @@ macro_rules! auth_module {
 
         /// Compute the authentication tag for a given message and key.
         ///
-        /// Returns an authentication tag, which is non-secret.
-        ///
         /// # Security Considerations
-        /// **Do not** use this function to *verify* an existing authentication tag for a message
-        /// as naïve comparison of authentication tags gives rise to a trivial timing attack.
-        /// Instead, use the [`verify`] function.
+        /// Do not use this function to *verify* an existing authentication tag for a message, as
+        /// naïve comparison of authentication tags gives rise to a timing attack. Instead, use
+        /// the [`verify`] function, which verifies an authentication tag in constant time.
         pub fn authenticate(message: &[u8], key: &Key) -> Result<Tag, $crate::AlkaliError> {
             $crate::require_init()?;
 
             let mut tag = [0; TAG_LENGTH as usize];
-            unsafe {
-                // SAFETY: This function takes a pointer to a buffer where the calculated
+
+            let auth_result = unsafe {
+                // SAFETY: This function takes a pointer to a location where the calculated
                 // authentication tag will be written, a pointer to a message to authenticate, the
                 // length of the message, and a pointer to the key to use for authentication. We
-                // have defined the tag buffer to be crypto_auth_BYTES long, the maximum length of
-                // an authentication tag as defined in Sodium. We use message.len() to specify the
-                // length of the message to authenticate, so the length provided is correct.
-                // Finally, we define the Key type to be crypto_auth_KEYBYTES long, so it is of the
-                // expected size for use in this function. The Key::inner method simply provides a
-                // pointer to the backing memory.
+                // have defined the `tag` buffer to be `crypto_auth_BYTES` long, the length of an
+                // authentication tag as defined in Sodium, so it is of sufficient size to store the
+                // tag. We use `message.len()` to specify the length of the message to authenticate,
+                // so clearly the `message` pointer is valid for reads of this length, and an
+                // over-read will not occur. Finally, we define the `Key` type to be
+                // `crypto_auth_KEYBYTES` long, so it is of the expected size for use in this
+                // function, and a full key can be read from the pointer without an over-read. The
+                // `Key::inner` method simply returns a pointer to the backing memory.
                 $authenticate(
                     tag.as_mut_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     key.inner() as *const libc::c_uchar,
-                );
-            }
+                )
+            };
+            $crate::assert_not_err!(auth_result, "crypto_auth");
 
             Ok(tag)
         }
@@ -365,14 +491,16 @@ macro_rules! auth_module {
             $crate::require_init()?;
 
             let verification_result = unsafe {
-                // SAFETY: This function takes a pointer to the tag to be verified, a pointer to
-                // the message to authenticate, the length of the message, and a pointer to the key
-                // to use for authentication. We have defined the tag buffer to be of the Tag type,
-                // which is crypto_auth_BYTES long, the maximum length of an authentication tag as
-                // defined in Sodium. We use message.len() to specify the length of the message to
-                // authenticate, so the length provided is correct. Finally, we define the Key type
-                // to be crypto_auth_KEYBYTES long, so it is of the expected size for use in this
-                // function. The Key::inner method simply provides a pointer to the backing memory.
+                // SAFETY: This function takes a pointer to the tag to be verified, a pointer to the
+                // message to authenticate, the length of the message, and a pointer to the key to
+                // use for authentication. We have defined the `Tag` type to be `crypto_auth_BYTES`
+                // long, the length of an authentication tag as defined in Sodium, so it is valid
+                // for reads of this length. We use `message.len()` to specify the length of the
+                // message to authenticate, so clearly the `message` pointer is valid for reads of
+                // this length, and an over-read will not occur. Finally, we define the `Key` type
+                // to be `crypto_auth_KEYBYTES` long, so it is of the expected size for use in this
+                // function, and a full key can be read from the pointer without an over-read. The
+                // `Key::inner` method simply returns a pointer to the backing memory.
                 $verify(
                     tag.as_ptr(),
                     message.as_ptr(),
@@ -390,8 +518,7 @@ macro_rules! auth_module {
     };
 }
 
-/// Generates tests for an `auth` implementation. Takes `message => key => tag;` as arguments,
-/// which are test vectors to be run (tag should be the expected auth tag for message under key).
+/// Generates tests for an `auth` implementation.
 #[allow(unused_macros)]
 macro_rules! auth_tests {
     ( $( {
@@ -399,8 +526,8 @@ macro_rules! auth_tests {
         key: $key:expr,
         tag: $tag:expr,
     }, )* ) => {
-        use super::{authenticate, verify, Key};
-        use $crate::random::fill_random;
+        use super::{authenticate, verify, Key, Multipart};
+        use $crate::random::{fill_random, random_u32_in_range};
         use $crate::AlkaliError;
 
         #[test]
@@ -459,7 +586,47 @@ macro_rules! auth_tests {
             Ok(())
         }
 
-        // TODO: Testing for multi-part authentication
+        #[test]
+        fn random_tests_multipart() -> Result<(), AlkaliError> {
+            for i in 1..2000 {
+                let key = Key::generate()?;
+                let mut msg = vec![0; i];
+                fill_random(&mut msg)?;
+
+                let tag_single = authenticate(&msg, &key)?;
+                let mut state = Multipart::new(&key)?;
+                let mut written = 0;
+                while written < i {
+                    let write_to = random_u32_in_range(written as u32, i as u32 + 1)?;
+                    state.update(&msg[written..write_to as usize]);
+                    written = write_to as usize;
+                }
+                let mut tag_multi = state.authenticate();
+                assert_eq!(tag_single, tag_multi);
+                verify(&msg, &tag_multi, &key)?;
+
+                let mut state = Multipart::new(&key)?;
+                let mut written = 0;
+                while written < i {
+                    let write_to = random_u32_in_range(written as u32, i as u32 + 1)?;
+                    state.update(&msg[written..write_to as usize]);
+                    written = write_to as usize;
+                }
+                state.verify(&tag_multi)?;
+
+                fill_random(&mut tag_multi)?;
+                let mut state = Multipart::new(&key)?;
+                let mut written = 0;
+                while written < i {
+                    let write_to = random_u32_in_range(written as u32, i as u32 + 1)?;
+                    state.update(&msg[written..write_to as usize]);
+                    written = write_to as usize;
+                }
+                assert!(state.verify(&tag_multi).is_err());
+            }
+
+            Ok(())
+        }
     };
 }
 
