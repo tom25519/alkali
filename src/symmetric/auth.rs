@@ -37,7 +37,7 @@
 //!
 //! ## Non-Secret Data
 //! * Authentication tags ([`Tag`]) are not sensitive, and do not reveal anything about the content
-//!   of the authenticated message to an outside observer
+//!   of the authenticated message to an attacker
 //!
 //! # Examples
 //! Generating an authentication tag for a message and verifying the authentication tag is valid
@@ -67,13 +67,7 @@
 //! // The `verify` function checks that `tag` is a valid authentication tag for the message and
 //! // key, thereby proving the message's authenticity. An error is returned if the tag is not valid
 //! // (i.e: the message is inauthentic).
-//! match auth::verify(MESSAGE.as_bytes(), &tag, &key) {
-//!     Ok(_) => println!("Authentication succeeded!"),
-//!     Err(alkali::AlkaliError::AuthError(auth::AuthError::AuthenticationFailed)) => {
-//!         panic!("Uh-oh, message altered!")
-//!     },
-//!     Err(_) => panic!("Some other error occurred"), // unlikely
-//! }
+//! auth::verify(MESSAGE.as_bytes(), &tag, &key).expect("Authentication failed!");
 //! ```
 //!
 //! If you have an especially long message, or a message you are transmitting/receiving in chunks,
@@ -114,7 +108,7 @@
 
 use thiserror::Error;
 
-/// Error type returned if something went wrong in the auth module.
+/// Error type returned if something went wrong in the `auth` module.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum AuthError {
     /// Failed to authenticate a message.
@@ -182,8 +176,9 @@ macro_rules! auth_module {
                     // amount of space allocated to store a key. The `Key::inner_mut` method simply
                     // returns a mutable pointer to its backing memory. The Sodium documentation
                     // specifies that `crypto_auth_KEYBYTES` random bytes will be written starting
-                    // at the provided pointer. This is a valid representation of [u8; KEY_LENGTH],
-                    // so `key` is in a valid state following this function call.
+                    // at the provided pointer. This is a valid representation of
+                    // `[u8; KEY_LENGTH]`, so `key` is in a valid state following this function
+                    // call.
                     $keygen(key.inner_mut() as *mut libc::c_uchar);
                 }
                 Ok(key)
@@ -202,12 +197,13 @@ macro_rules! auth_module {
         /// This can be used to calculate an authentication tag for a message which is too large to
         /// fit into memory, or where the message is transmitted/received in portions.
         ///
+        /// This struct uses heap memory while in scope, allocated using Sodium's [secure memory
+        /// utilities](https://doc.libsodium.org/memory_management).
+        ///
+        /// # Security Considerations
         /// The inner state of this struct should not be made public: It can be used to calculate
         /// authentication tags for the associated key. None of the methods exposed here will reveal
         /// any of its inner state, so this shouldn't be something that you need to worry about.
-        ///
-        /// This struct uses heap memory while in scope, allocated using Sodium's [secure memory
-        /// utilities](https://doc.libsodium.org/memory_management).
         #[derive(Debug)]
         pub struct Multipart {
             state: std::ptr::NonNull<$mp_state>,
@@ -243,10 +239,11 @@ macro_rules! auth_module {
                     // allocation failed, so this pointer is valid for use here. The `Key` type is
                     // defined to have length equal to `crypto_auth_KEYBYTES`, so
                     // `crypto_auth_KEYBYTES` bytes can be read from the `key` pointer without an
-                    // over-read. Sodium's documentation specifies that after this function is
-                    // called, the memory pointed to by `state` is correctly initialised, and is a
-                    // valid representation of a `crypto_auth_state` struct which can be used with
-                    // other functions from Sodium.
+                    // over-read. The `Key::inner` method simply returns an immutable pointer to the
+                    // type's backing memory. Sodium's documentation specifies that after this
+                    // function is called, the memory pointed to by `state` is correctly
+                    // initialised, and is a valid representation of a `crypto_auth_state` struct
+                    // which can be used with other functions from Sodium.
                     $mp_init(
                         state.as_mut(),
                         key.inner() as *const libc::c_uchar,
@@ -283,6 +280,9 @@ macro_rules! auth_module {
             /// The same [`Key`] used to initialise the original [`Multipart`] instance will be used
             /// to authenticate any data added to the new instance.
             pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
+                // We do not use `require_init` here, as it must be called to initialise a
+                // `Multipart` struct.
+
                 let state = unsafe {
                     // SAFETY: This call to malloc() will allocate the memory required for a
                     // `crypto_auth_state` type, outside of Rust's memory management. The
@@ -354,7 +354,7 @@ macro_rules! auth_module {
                 // We do not use `require_init` here, as it must be called to initialise a
                 // `Multipart` struct.
 
-                let mut tag = [0u8; TAG_LENGTH as usize];
+                let mut tag = [0u8; TAG_LENGTH];
 
                 let finalise_result = unsafe {
                     // SAFETY: This function takes a pointer to a `crypto_auth_state` struct and a
@@ -383,7 +383,7 @@ macro_rules! auth_module {
                 // We do not use `require_init` here, as it must be called to initialise a
                 // `Multipart` struct.
 
-                let mut actual_tag = [0u8; TAG_LENGTH as usize];
+                let mut actual_tag = [0u8; TAG_LENGTH];
 
                 let finalise_result = unsafe {
                     // SAFETY: This function takes a pointer to a `crypto_auth_state` struct and a
@@ -398,19 +398,7 @@ macro_rules! auth_module {
                 };
                 $crate::assert_not_err!(finalise_result, "crypto_auth_final");
 
-                let verification_result = unsafe {
-                    // SAFETY: This function takes two pointers, and a length. The two pointers
-                    // will be compared over length bytes for equality. The `Tag` type here is
-                    // defined to be `TAG_LENGTH` bytes, so both pointers passed to the function
-                    // are valid for reads of `TAG_LENGTH` bytes.
-                    libsodium_sys::sodium_memcmp(
-                        tag.as_ptr() as *const libc::c_void,
-                        actual_tag.as_ptr() as *const libc::c_void,
-                        TAG_LENGTH,
-                    )
-                };
-
-                if verification_result == 0 {
+                if $crate::util::eq(tag, &actual_tag)? {
                     Ok(())
                 } else {
                     Err($crate::symmetric::auth::AuthError::AuthenticationFailed.into())
@@ -420,6 +408,9 @@ macro_rules! auth_module {
 
         impl Drop for Multipart {
             fn drop(&mut self) {
+                // We do not use `require_init` here, as it must be called to initialise a
+                // `Multipart` struct.
+
                 unsafe {
                     // SAFETY:
                     // * Is a double-free possible in safe code?
@@ -455,7 +446,7 @@ macro_rules! auth_module {
         pub fn authenticate(message: &[u8], key: &Key) -> Result<Tag, $crate::AlkaliError> {
             $crate::require_init()?;
 
-            let mut tag = [0; TAG_LENGTH as usize];
+            let mut tag = [0u8; TAG_LENGTH];
 
             let auth_result = unsafe {
                 // SAFETY: This function takes a pointer to a location where the calculated
