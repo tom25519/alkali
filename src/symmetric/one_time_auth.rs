@@ -180,6 +180,8 @@ pub mod poly1305 {
                 // specifies that `crypto_onetimeauth_KEYBYTES` random bytes will be written
                 // starting at the provided pointer. This is a valid representation of
                 // `[u8; KEY_LENGTH]`, so `key` is in a valid state following this function call.
+                // The `Key::inner_mut` method simply returns a mutable pointer to its backing
+                // memory.
                 sodium::crypto_onetimeauth_poly1305_keygen(key.inner_mut() as *mut libc::c_uchar);
             }
             Ok(key)
@@ -235,7 +237,7 @@ pub mod poly1305 {
             };
 
             let init_result = unsafe {
-                // SAFETY: This function initialises a crypto_onetimeauth_state struct. The first
+                // SAFETY: This function initialises a `crypto_onetimeauth_state` struct. The first
                 // argument should be a pointer to a region of memory sufficient to store such a
                 // struct. We pass a pointer to a region of memory sufficient to store the struct,
                 // allocated above. The type of `state` is a `NonNull` pointer, and the unsafe block
@@ -266,7 +268,7 @@ pub mod poly1305 {
                     // preventing a double-free or use-after-free.
                     mem::free(state);
                 }
-                unexpected_err!("crypto_onetimeauth_init");
+                unexpected_err!("crypto_onetimeauth_poly1305_init");
             }
 
             Ok(Self {
@@ -346,7 +348,7 @@ pub mod poly1305 {
                 )
             };
 
-            assert_not_err!(update_result, "crypto_onetimeauth_update");
+            assert_not_err!(update_result, "crypto_onetimeauth_poly1305_update");
         }
 
         /// Calculate a one-time authentication tag for the specified message.
@@ -375,7 +377,7 @@ pub mod poly1305 {
                 // length.
                 sodium::crypto_onetimeauth_poly1305_final(self.state.as_mut(), tag.as_mut_ptr())
             };
-            assert_not_err!(finalise_result, "crypto_onetimeauth_final");
+            assert_not_err!(finalise_result, "crypto_onetimeauth_poly1305_final");
 
             tag
         }
@@ -407,7 +409,7 @@ pub mod poly1305 {
                     actual_tag.as_mut_ptr(),
                 )
             };
-            assert_not_err!(finalise_result, "crypto_onetimeauth_final");
+            assert_not_err!(finalise_result, "crypto_onetimeauth_poly1305_final");
 
             if crate::util::eq(tag, &actual_tag)? {
                 Ok(())
@@ -429,8 +431,8 @@ pub mod poly1305 {
                 //     exactly once when the struct is actually dropped. Once the value is dropped,
                 //     there's no way to call the method again to cause a double free.
                 // * Is a use-after-free possible in safe code?
-                //   * No: We only ever free a buffer on drop, and after drop, none of the type's
-                //     methods are accessible.
+                //   * No: We only ever free `self.state` on drop, and after drop, none of the
+                //     type's methods are accessible.
                 // * Is a memory leak possible in safe code?
                 //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
                 //     `std::mem::forget`, the destructor will not be called even though the struct
@@ -485,7 +487,7 @@ pub mod poly1305 {
                 key.inner() as *const libc::c_uchar,
             )
         };
-        assert_not_err!(auth_result, "crypto_onetimeauth");
+        assert_not_err!(auth_result, "crypto_onetimeauth_poly1305");
 
         Ok(tag)
     }

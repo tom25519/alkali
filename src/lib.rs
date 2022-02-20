@@ -23,44 +23,25 @@
 //! There are also hashing algorithms available in the [`hash`] module, and tools for
 //! cryptographically-secure pseudo-random number generation in the [`random`] module.
 //!
-//! I want to...
-//! * Encrypt a message for a specific party using their public key, so that they can verify I sent
-//!   it
-//!     * Use [`asymmetric::cipher`]
-//! * Anonymously encrypt a message for a specific party using their public key
-//!     * Use [`asymmetric::repudiable_cipher`]
-//! * Encrypt a message, so that specific trusted parties, with whom I already share a secret key,
-//!   can decrypt it
-//!     * Use [`symmetric::cipher`]
-//! * Encrypt a sequence of messages in order, so that the decrypting party can verify no messages
-//!   have been removed, reordered, etc.
-//!     * Use [`symmetric::cipher_stream`]
-//! * Encrypt an arbitrarily-long data stream, such as a file
-//!     * Use [`symmetric::cipher_stream`]
-//! * Produce a signature for a message, so that anyone can verify I sent it
-//!     * Use [`asymmetric::sign`]
-//! * Produce an authentication tag for a message, so that specific trusted parties, with whom I
-//!   already share a secret key, can verify I sent it
-//!     * Use [`symmetric::auth`]
-//! * Store a user's password so I can verify their identity on next login
-//!     * Use [`hash::pbkdf`]
-//! * Derive a key from a low-entropy input (i.e: a password)
-//!     * Use [`hash::pbkdf`]
-//! * Calculate the  "fingerprint" of a file or message
-//!     * Use [`hash::generic`]
-//! * Establish a secret key with another party over an insecure channel
-//!     * Use [`asymmetric::kx`]
-//! * Calculate a hash for use in a hash table/bloom filter/etc.
-//!     * Use [`hash::short`]
-//! * Derive multiple subkeys from a single high-entropy key
-//!     * Use [`hash::kdf`]
-//! * Generate cryptographically secure pseudo-random data
-//!     * Use [`random`]
+//! <!-- big ugly table -->
+//! | Alkali API | Corresponding Sodium API | Purpose |
+//! | ---------- | ------------------------ | ------- |
+//! | [`asymmetric::cipher`] | [`crypto_box`](https://doc.libsodium.org/public-key_cryptography/authenticated_encryption) | Encrypt a message for a specific party, so only they can decrypt it |
+//! | [`asymmetric::kx`] | [`crypto_kx`](https://doc.libsodium.org/key_exchange) | Establish a secret key with another party over an insecure channel |
+//! | [`asymmetric::sign`] | [`crypto_sign`](https://doc.libsodium.org/public-key_cryptography/public-key_signatures) | Sign a message, so that anyone can verify you sent it |
+//! | [`hash::generic`] | [`crypto_generichash`](https://doc.libsodium.org/hashing/generic_hashing) | Calculate the "fingerprint" of a file or message |
+//! | [`hash::kdf`] | [`crypto_kdf`](https://doc.libsodium.org/key_derivation) | Derive multiple subkeys from a single high-entropy key |
+//! | [`hash::pbkdf`] | [`crypto_pwhash`](https://doc.libsodium.org/password_hashing/default_phf) | Store a user's password to verify their identity at a later time, or derive a key from a password |
+//! | [`hash::short`] | [`crypto_shorthash`](https://doc.libsodium.org/hashing/short-input_hashing) | Calculate a hash for use in a hash table/bloom filter/etc. |
+//! | [`symmetric::auth`] | [`crypto_auth`](https://doc.libsodium.org/secret-key_cryptography/secret-key_authentication) | Produce an authentication tag for a message which can be verified by trusted parties with whom you share a secret key |
+//! | [`symmetric::cipher`] | [`crypto_secretbox`](https://doc.libsodium.org/secret-key_cryptography/secretbox) | Encrypt a message so that trusted parties, with whom you share a secret key, can decrypt it |
+//! | [`symmetric::cipher_stream`] | [`crypto_secretstream`](https://doc.libsodium.org/secret-key_cryptography/secretstream) | Encrypt a sequence of messages, or an arbitrarily-long data stream |
+//! | [`random`] | [`randombytes`](https://doc.libsodium.org/generating_random_data) | Generate unpredictable data suitable for cryptographic use |
 //!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
 //! custom allocator from Sodium to manage their memory. They can be used like standard array/slice
-//! types, as they implement `std::ops::Deref`, [`AsRef`], etc., so anywhere where you might be
+//! types, as they implement [`std::ops::Deref`], [`AsRef`], etc., so anywhere where you might be
 //! able to use a `&[u8]`, a hardened buffer can also be used. The benefit to using these structs
 //! over just using normal arrays/vectors is that they have a number of protections implemented
 //! intended to prevent leakage of their contents via side channels.

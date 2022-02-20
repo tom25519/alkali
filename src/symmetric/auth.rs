@@ -262,7 +262,7 @@ macro_rules! auth_module {
                         // initialised, preventing a double-free or use-after-free.
                         $crate::mem::free(state);
                     }
-                    $crate::unexpected_err!("crypto_auth_init");
+                    $crate::unexpected_err!(stringify!($mp_init));
                 }
 
                 Ok(Self {
@@ -338,7 +338,7 @@ macro_rules! auth_module {
                     )
                 };
 
-                $crate::assert_not_err!(update_result, "crypto_auth_update");
+                $crate::assert_not_err!(update_result, stringify!($mp_update));
             }
 
             /// Calculate the authentication tag for the specified message.
@@ -367,7 +367,7 @@ macro_rules! auth_module {
                     // for writes of the expected size for this function.
                     $mp_final(self.state.as_mut(), tag.as_mut_ptr())
                 };
-                $crate::assert_not_err!(finalise_result, "crypto_auth_final");
+                $crate::assert_not_err!(finalise_result, stringify!($mp_final));
 
                 tag
             }
@@ -396,7 +396,7 @@ macro_rules! auth_module {
                     // long, so it is valid for writes of the expected size for this function.
                     $mp_final(self.state.as_mut(), actual_tag.as_mut_ptr())
                 };
-                $crate::assert_not_err!(finalise_result, "crypto_auth_final");
+                $crate::assert_not_err!(finalise_result, stringify!($mp_final));
 
                 if $crate::util::eq(tag, &actual_tag)? {
                     Ok(())
@@ -419,17 +419,17 @@ macro_rules! auth_module {
                     //     is dropped, there's no way to call the method again to cause a double
                     //     free.
                     // * Is a use-after-free possible in safe code?
-                    //   * No: We only ever free a buffer on drop, and after drop, none of the
+                    //   * No: We only ever free `self.state` on drop, and after drop, none of the
                     //     type's methods are accessible.
                     // * Is a memory leak possible in safe code?
                     //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
                     //     `std::mem::forget`, the destructor will not be called even though the
                     //     struct is dropped. However, it is documented that in these cases heap
-                    //     memory may be leaked, so this is expected behaviour. In addition,
-                    //     certain signal interrupts or using panic=abort behaviour will mean the
-                    //     destructor is not called. There's little we can do about this, but a
-                    //     failure to free is probably reasonable in such cases. In any other case,
-                    //     `drop` will be called, and the memory freed.
+                    //     memory may be leaked, so this is expected behaviour. In addition, certain
+                    //     signal interrupts or using panic=abort behaviour will mean the destructor
+                    //     is not called. There's little we can do about this, but a failure to free
+                    //     is probably reasonable in such cases. In any other case, `drop` will be
+                    //     called, and the memory freed.
                     // `self.state` was allocated in the `Multipart` constructor using Sodium's
                     // allocator, so it is correct to free it using Sodium's allocator.
                     $crate::mem::free(self.state);
@@ -467,7 +467,7 @@ macro_rules! auth_module {
                     key.inner() as *const libc::c_uchar,
                 )
             };
-            $crate::assert_not_err!(auth_result, "crypto_auth");
+            $crate::assert_not_err!(auth_result, stringify!($authenticate));
 
             Ok(tag)
         }
