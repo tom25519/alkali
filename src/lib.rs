@@ -31,7 +31,7 @@
 //! | [`asymmetric::sign`] | [`crypto_sign`](https://doc.libsodium.org/public-key_cryptography/public-key_signatures) | Sign a message, so that anyone can verify you sent it |
 //! | [`hash::generic`] | [`crypto_generichash`](https://doc.libsodium.org/hashing/generic_hashing) | Calculate the "fingerprint" of a file or message |
 //! | [`hash::kdf`] | [`crypto_kdf`](https://doc.libsodium.org/key_derivation) | Derive multiple subkeys from a single high-entropy key |
-//! | [`hash::pbkdf`] | [`crypto_pwhash`](https://doc.libsodium.org/password_hashing/default_phf) | Store a user's password to verify their identity at a later time, or derive a key from a password |
+//! | [`hash::pbkdf`] | [`crypto_pwhash`](https://doc.libsodium.org/password_hashing/default_phf) | Store a user's password to verify their identity at a later time, or derive a cryptographic key from a password |
 //! | [`hash::short`] | [`crypto_shorthash`](https://doc.libsodium.org/hashing/short-input_hashing) | Calculate a hash for use in a hash table/bloom filter/etc. |
 //! | [`symmetric::auth`] | [`crypto_auth`](https://doc.libsodium.org/secret-key_cryptography/secret-key_authentication) | Produce an authentication tag for a message which can be verified by trusted parties with whom you share a secret key |
 //! | [`symmetric::cipher`] | [`crypto_secretbox`](https://doc.libsodium.org/secret-key_cryptography/secretbox) | Encrypt a message so that trusted parties, with whom you share a secret key, can decrypt it |

@@ -43,6 +43,7 @@
 //! ## Secret Data
 //! * Private keys ([`PrivateKey`]) must be kept secret
 //! * A [`Keypair`] contains a [`PrivateKey`], and as such, should also be kept secret
+//! * Seeds ([`Seed`]) must be kept secret
 //!
 //! ## Non-Secret Data
 //! * Public keys ([`PublicKey`]) can (and should) be made public
@@ -358,9 +359,9 @@ pub mod ed25519 {
         ///
         /// A keypair consists of a [`PrivateKey`], which is used to sign messages and must be kept
         /// secret, and a [`PublicKey`], which is used to verify message signatures and should be
-        /// made public. This function calculates the [`PublicKey`] associated with the provided
-        /// private key and stores both in a keypair. This is useful if you know your private key,
-        /// but don't have the corresponding public key.
+        /// made public. This function calculates the public key associated with the provided
+        /// private key and stores both in a [`Keypair`]. This is useful if you know your private
+        /// key, but don't have the corresponding public key.
         ///
         /// No [clamping](https://www.jcraige.com/an-explainer-on-ed25519-clamping) will be applied
         /// to the provided private key, so it is important that it is a valid private key generated
