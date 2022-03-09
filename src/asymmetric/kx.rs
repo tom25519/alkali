@@ -500,8 +500,7 @@ pub mod x25519blake2b {
             let client_keypair = Keypair::from_seed(&client_seed)?;
             let server_keypair = Keypair::from_seed(&server_seed)?;
 
-            let (client_tx, client_rx) =
-                client_keypair.calculate_client_keys(&server_keypair.public_key)?;
+            let (client_tx, client_rx) = client_keypair.client_keys(&server_keypair.public_key)?;
 
             assert_eq!(
                 &client_tx[..],
@@ -520,8 +519,7 @@ pub mod x25519blake2b {
                 ]
             );
 
-            let (server_tx, server_rx) =
-                server_keypair.calculate_server_keys(&client_keypair.public_key)?;
+            let (server_tx, server_rx) = server_keypair.server_keys(&client_keypair.public_key)?;
             assert_eq!(&server_tx[..], &client_rx[..]);
             assert_eq!(&server_rx[..], &client_tx[..]);
 
@@ -538,8 +536,8 @@ pub mod x25519blake2b {
 
             let keypair = Keypair::generate()?;
 
-            assert!(keypair.calculate_client_keys(&weak_public_key).is_err());
-            assert!(keypair.calculate_server_keys(&weak_public_key).is_err());
+            assert!(keypair.client_keys(&weak_public_key).is_err());
+            assert!(keypair.server_keys(&weak_public_key).is_err());
 
             Ok(())
         }
@@ -550,8 +548,8 @@ pub mod x25519blake2b {
                 let client = Keypair::generate()?;
                 let server = Keypair::generate()?;
 
-                let (client_tx, client_rx) = client.calculate_client_keys(&server.public_key)?;
-                let (server_tx, server_rx) = server.calculate_server_keys(&client.public_key)?;
+                let (client_tx, client_rx) = client.client_keys(&server.public_key)?;
+                let (server_tx, server_rx) = server.server_keys(&client.public_key)?;
 
                 assert_eq!(&client_tx[..], &server_rx[..]);
                 assert_eq!(&client_rx[..], &server_tx[..]);
