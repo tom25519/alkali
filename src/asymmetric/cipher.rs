@@ -35,7 +35,7 @@
 //! In this construction, either party can both encrypt & decrypt messages, and compute a valid
 //! authentication tag for any encrypted message. Furthermore, the recipient must know the identity
 //! of the sender to receive and decrypt messages. If any of these factors are a concern, the
-//! [`crate::asymmetric::repudiable_cipher`] API should be used.
+//! [`crate::asymmetric::seal`] API should be used.
 //!
 //! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
 //! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following

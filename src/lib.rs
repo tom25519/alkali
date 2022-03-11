@@ -26,9 +26,10 @@
 //! <!-- big ugly table -->
 //! | Alkali API | Corresponding Sodium API | Purpose |
 //! | ---------- | ------------------------ | ------- |
-//! | [`asymmetric::cipher`] | [`crypto_box`](https://doc.libsodium.org/public-key_cryptography/authenticated_encryption) | Encrypt a message for a specific party, so only they can decrypt it |
+//! | [`asymmetric::cipher`] | [`crypto_box`](https://doc.libsodium.org/public-key_cryptography/authenticated_encryption) | Encrypt a message for a specific party, so only you + them can decrypt it |
 //! | [`asymmetric::kx`] | [`crypto_kx`](https://doc.libsodium.org/key_exchange) | Establish a secret key with another party over an insecure channel |
 //! | [`asymmetric::sign`] | [`crypto_sign`](https://doc.libsodium.org/public-key_cryptography/public-key_signatures) | Sign a message, so that anyone can verify you sent it |
+//! | [`asymmetric::seal`] | [`crypto_box_seal`](https://doc.libsodium.org/public-key_cryptography/sealed_boxes) | Anonymously encrypt a message for a specific party, so only they can decrypt it |
 //! | [`hash::generic`] | [`crypto_generichash`](https://doc.libsodium.org/hashing/generic_hashing) | Calculate the "fingerprint" of a file or message |
 //! | [`hash::kdf`] | [`crypto_kdf`](https://doc.libsodium.org/key_derivation) | Derive multiple subkeys from a single high-entropy key |
 //! | [`hash::pbkdf`] | [`crypto_pwhash`](https://doc.libsodium.org/password_hashing/default_phf) | Store a user's password to verify their identity at a later time, or derive a cryptographic key from a password |
@@ -134,9 +135,9 @@ pub enum AlkaliError {
     #[error("key exchange error")]
     KeyExchangeError(#[from] asymmetric::kx::KeyExchangeError),
 
-    /// An error occurred in the [`asymmetric::repudiable_cipher`] module.
-    #[error("repudiable cipher error")]
-    RepudiableCipherError(#[from] asymmetric::repudiable_cipher::RepudiableCipherError),
+    /// An error occurred in the [`asymmetric::seal`] module.
+    #[error("seal error")]
+    SealError(#[from] asymmetric::seal::SealError),
 
     /// An error occurred in the [`asymmetric::sign`] module.
     #[error("signing error")]

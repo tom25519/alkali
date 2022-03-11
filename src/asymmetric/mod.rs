@@ -2,5 +2,5 @@
 
 pub mod cipher;
 pub mod kx;
-pub mod repudiable_cipher;
+pub mod seal;
 pub mod sign;
