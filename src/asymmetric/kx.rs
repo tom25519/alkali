@@ -272,7 +272,7 @@ pub mod x25519blake2b {
                 // a public key, a pointer to a region of memory sufficient to store a private key,
                 // and a pointer to a seed. We have defined the `PublicKey` type to be
                 // `crypto_kx_PUBLICKEYBYTES`, so it is of sufficient size to store the public key.
-                // The `PrivateKey` type allocated `crypt_kx_SECRETKEYBYTES`, the length of a
+                // The `PrivateKey` type allocates `crypto_kx_SECRETKEYBYTES`, the length of a
                 // private key for this algorithm, so it is of sufficient size to store the private
                 // key. Any region of memory can be a valid representation of a `u8` array, so both
                 // variables will still be valid after this function call. The
@@ -303,7 +303,7 @@ pub mod x25519blake2b {
         pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, AlkaliError> {
             require_init()?;
 
-            let mut public_key = [0; PUBLIC_KEY_LENGTH];
+            let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
 
             let scalarmult_result = unsafe {
                 // SAFETY: This function expects a pointer to a region of memory sufficient to store
