@@ -6,29 +6,38 @@
 //!
 //! Authenticated encryption is used to encrypt messages, providing assurance to the receiver that
 //! the ciphertext has not been modified in transit by an attacker or transmission error. In
-//! symmetric encryption, all parties who wish to encrypt or decrypt messages must share the same
-//! secret key, which is used for both encryption and decryption.
+//! symmetric encryption, all parties who wish to encrypt or decrypt messages must know a single
+//! secret key prior to communication, which is used for both encryption and decryption.
 //!
 //! # Algorithm Details
-//! This authenticated encryption construction uses the [XSalsa20](xsalsa20poly1305) stream cipher
-//! (Salsa20 with an eXtended nonce length) for encryption by default, together with the Poly1305
-//! MAC for authentication. [XChaCha20](xchacha20poly1305), which uses an eXtended nonce variant of
-//! ChaCha20, is also available.
+//! This authenticated encryption construction uses the [XSalsa20](https://cr.yp.to/snuffle.html)
+//! stream cipher (Salsa20 with an eXtended nonce length) for encryption by default, together with
+//! the [Poly1305](https://en.wikipedia.org/wiki/Poly1305) MAC for authentication. This construction
+//! is exposed in the [`xsalsa20poly1305`] module.
+//!
+//! As an alternative, an implementation which uses [XChaCha20](https://cr.yp.to/chacha.html) as the
+//! stream cipher is also available, exposed as [`xchacha20poly1305`].
 //!
 //! # Security Considerations
-//! For the algorithms in this module, nonces must *never* be used more than once with the same
-//! key. If you just use the [`encrypt`]/[`encrypt_detached`] functions, this should not be a
-//! concern, as a random nonce is generated for every message encrypted with these functions.
-//! However, for the functions which allow you to specify the nonce to use, please ensure you never
-//! use a given nonce more than once with the same key: Nonces for the algorithms here are
-//! sufficiently long that a nonce can be randomly chosen for every message using
-//! [`generate_nonce`], and the probability of nonce reuse will be effectively zero.
+//! For the algorithms in this module, nonces must *never* be used more than once with the same key.
+//! Nonces for the algorithms here are sufficiently long that a nonce can be randomly chosen for
+//! every message using [`generate_nonce`], and the probability of nonce reuse will be effectively
+//! zero.
 //!
-//! Nonces and MACs are not secret values, and can be transmitted in the clear.
+//! If many trusted parties have access to the secret key, there is no way to prove which one of
+//! them sent a given message without additional data.
 //!
 //! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
 //! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
 //! decryption via [`util::unpad`](crate::util::unpad).
+//!
+//! ## Secret Data
+//! * The encryption/decryption key ([`Key`]) must only be known to parties who should be able to
+//!   both encrypt and decrypt messages
+//!
+//! ## Non-Secret Data
+//! * MACs ([`MAC`]) are not sensitive
+//! * Nonces ([`Nonce`]) are not sensitive
 //!
 //! # Examples
 //! Standard encryption & decryption (uses [`encrypt`] and [`decrypt`]):
@@ -36,42 +45,79 @@
 //! ```rust
 //! use alkali::symmetric::cipher;
 //!
-//! // Generate a new random key to use for encryption/decryption
+//! const MESSAGE: &'static str = "Here's a message to encrypt. It can be of any length.";
+//!
+//! // Prior to communication:
+//!
+//! // A random secret key is generated & distributed to all parties:
 //! let key = cipher::Key::generate().unwrap();
-//! let plaintext = b"Here's a message we wish to encrypt. It can be of any length.";
-//! // Be sure to allocate `MAC_LENGTH` extra bytes to store the ciphertext
-//! let mut ciphertext = vec![0; plaintext.len() + cipher::MAC_LENGTH];
-//! // The `encrypt` function generates a random nonce which we'll need to know for decryption
-//! let (nonce, _) = cipher::encrypt(plaintext, &key, &mut ciphertext).unwrap();
+//!
 //!
 //! // ...
 //!
-//! // The ciphertext contains `MAC_LENGTH` extra bytes compared to the plaintext
-//! let mut decrypted = vec![0; ciphertext.len() - cipher::MAC_LENGTH];
-//! cipher::decrypt(&ciphertext, &key, &nonce, &mut decrypted).unwrap();
-//! assert_eq!(&plaintext[..], &decrypted[..]);
+//!
+//! // Sender side:
+//! // We assume the sender knows `key`.
+//!
+//! // The encrypted message will be `MAC_LENGTH` bytes longer than the original message.
+//! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len() + cipher::MAC_LENGTH];
+//! // Generate a random nonce for this encryption operation. Nonces must never be reused!
+//! let nonce = cipher::generate_nonce().unwrap();
+//! // If this function is successful, the ciphertext + a MAC will be stored in `ciphertext`
+//! cipher::encrypt(MESSAGE.as_bytes(), &key, &nonce, &mut ciphertext).unwrap();
+//!
+//!
+//! // ...
+//!
+//!
+//! // Receiver side:
+//! // We assume the receiver knows `key`.
+//!
+//! let mut plaintext = vec![0u8; ciphertext.len() - cipher::MAC_LENGTH];
+//! // We `decrypt` function not only decrypts `ciphertext`, but also verifies its authenticity
+//! // using the included MAC. This operation will fail if a forgery is attempted.
+//! cipher::decrypt(&ciphertext, &key, &nonce, &mut plaintext).unwrap();
+//! assert_eq!(&plaintext, MESSAGE.as_bytes());
 //! ```
 //!
-//! Detached encryption & decryption, specifying our own nonce (uses
-//! [`encrypt_detached_with_nonce`], [`decrypt_detached`]):
+//! Detached encryption & decryption, which stores the MAC separately to the ciphertext (uses
+//! [`encrypt_detached`] and [`decrypt_detached`]):
 //!
 //! ```rust
 //! use alkali::symmetric::cipher;
 //!
+//! const MESSAGE: &'static str = "Another encryption example!";
+//!
+//! // Prior to communication:
+//!
+//! // A random secret key is generated & distributed to all parties:
 //! let key = cipher::Key::generate().unwrap();
-//! let plaintext = b"When will these examples stop?";
-//! let nonce = cipher::generate_nonce().unwrap();
-//! let mut ciphertext = vec![0; plaintext.len()];
-//! // Detached encryption doesn't prepend the MAC to the message, so we'll need to store it
-//! // separately
-//! let mac = cipher::encrypt_detached_with_nonce(plaintext, &key, &nonce, &mut ciphertext)
-//!     .unwrap();
+//!
 //!
 //! // ...
 //!
-//! let mut decrypted = [0; 30];
-//! cipher::decrypt_detached(&ciphertext, &mac, &key, &nonce, &mut decrypted).unwrap();
-//! assert_eq!(&decrypted, plaintext);
+//!
+//! // Sender side:
+//! // We assume the sender knows `key`.
+//!
+//! // In detached mode, the ciphertext length is identical to the plaintext length.
+//! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len()];
+//! // The detached encryption function returns a MAC separately.
+//! let nonce = cipher::generate_nonce().unwrap();
+//! let (_, mac) =
+//!     cipher::encrypt_detached(MESSAGE.as_bytes(), &key, &nonce, &mut ciphertext).unwrap();
+//!
+//!
+//! // ...
+//!
+//!
+//! // Receiver side:
+//! // We assume the receiver knows `key`.
+//!
+//! let mut plaintext = vec![0u8; ciphertext.len()];
+//! // We will need to pass the MAC as another argument to the detached decryption function.
+//! cipher::decrypt_detached(&ciphertext, &mac, &key, &nonce, &mut plaintext);
+//! assert_eq!(&plaintext, MESSAGE.as_bytes());
 //! ```
 
 use thiserror::Error;
@@ -84,15 +130,14 @@ pub enum CipherError {
     ///
     /// Each function in this module should provide information in its documentation about the
     /// output length requirements.
-    #[error("the output is insufficient to store ciphertext/plaintext, required {0}, found {1}")]
-    OutputInsufficient(usize, usize),
+    #[error("the output is insufficient to store ciphertext/plaintext")]
+    OutputInsufficient,
 
-    /// Message too long for encryption/decryption with this cipher.
+    /// Message too long for use with this cipher.
     ///
     /// Beyond a certain point, the keystream of the cipher is exhausted, and it can no longer be
     /// used to safely encrypt message contents. Therefore, this error is returned if the message
-    /// provided is too long. Messages can be at most
-    /// [`MESSAGE_LENGTH_MAX`](struct@MESSAGE_LENGTH_MAX) bytes.
+    /// provided is too long. Messages can be at most [`struct@MESSAGE_LENGTH_MAX`] bytes.
     #[error("the message is too long for encryption/decryption with this cipher")]
     MessageTooLong,
 
@@ -127,7 +172,7 @@ macro_rules! cipher_module {
         pub const NONCE_LENGTH: usize = $nonce_len as usize;
 
         lazy_static::lazy_static! {
-            /// The maximum message length which can be encrypted with this cipher
+            /// The maximum message length which can be encrypted with this cipher, in bytes.
             pub static ref MESSAGE_LENGTH_MAX: usize = unsafe {
                 // SAFETY: This function just returns a constant value, and should always be safe
                 // to call.
@@ -136,31 +181,36 @@ macro_rules! cipher_module {
         }
 
         $crate::hardened_buffer! {
-            /// Secret key for symmetric authenticated encryption.
+            /// A secret key for symmetric authenticated encryption.
             ///
-            /// There are no technical constraints on the contents of a key, but it should be
-            /// generated randomly using [`Key::generate`].
+            /// There are no *technical* constraints on the contents of a key, but it should be
+            /// indistinguishable from random noise. A random key can be securely generated via
+            /// [`Key::generate`].
             ///
             /// A secret key must not be made public.
             ///
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are also taken to
-            /// protect its contents.
+            /// protect its contents. This type in particular can be thought of as roughly
+            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be
+            /// used like it is an `&[u8]`. This struct uses heap memory while in scope, allocated
+            /// using Sodium's [secure memory
+            /// utilities](https://doc.libsodium.org/memory_management).
             Key(KEY_LENGTH);
         }
 
         impl Key {
-            /// Generate a new, random key for use in symmetric authenticated encryption.
+            /// Generate a new, random key for use in symmetric AE.
             pub fn generate() -> Result<Self, $crate::AlkaliError> {
                 $crate::require_init()?;
 
                 let mut key = Self::new_empty()?;
                 unsafe {
                     // SAFETY: This function expects a pointer to a region of memory sufficient to
-                    // store a key for this algorithm. We have defined this type based on the
-                    // `crypto_secretbox_KEYBYTES` constant from Sodium, so it definitely has the
-                    // correct amount of space allocated to store the key. The `Key::inner_mut`
-                    // method simply returns a mutable pointer to the struct's backing memory.
+                    // store a key. The `Key` type allocates `crypto_secretbox_KEYBYTES`, the length
+                    // of a key for this algorithm. It is therefore valid for writes of the required
+                    // length. The `Key::inner_mut` method simply returns a mutable pointer to the
+                    // struct's backing memory.
                     $keygen(key.inner_mut() as *mut libc::c_uchar);
                 }
                 Ok(key)
@@ -168,19 +218,27 @@ macro_rules! cipher_module {
         }
 
         /// A MAC (Message Authentication Code), used to authenticate a message.
+        ///
+        /// If using [`encrypt`], the MAC is included in the ciphertext. It is returned separately
+        /// in the [`encrypt_detached`] variant.
         pub type MAC = [u8; MAC_LENGTH];
 
         /// A nonce, used to introduce non-determinism into the keystream calculation.
+        ///
+        /// Nonces must never be used for multiple messages with the same key. Ideally, generate a
+        /// random nonce for every message using [`generate_nonce`], or use a counter value,
+        /// erroring on overflow.
         pub type Nonce = [u8; NONCE_LENGTH];
 
         /// Generate a random nonce for use with the functions throughout this module.
         ///
-        /// The cipher used here has a sufficiently long nonce size that we can simply generate a
+        /// It is vital that a given nonce is never used to encrypt more than one message under the
+        /// same key. The cipher used here has a sufficient nonce size that we can simply generate a
         /// random nonce for every message we wish to encrypt, and the chances of reusing a nonce
         /// are essentially zero.
         ///
         /// Returns a nonce generated using a Cryptographically Secure Pseudo-Random Number
-        /// Generator, or an error if some error occurred.
+        /// Generator, or a [`crate::AlkaliError`] if an error occurred.
         pub fn generate_nonce() -> Result<Nonce, $crate::AlkaliError> {
             let mut nonce = [0; NONCE_LENGTH];
             $crate::random::fill_random(&mut nonce)?;
@@ -189,68 +247,27 @@ macro_rules! cipher_module {
 
         /// Encrypt `message` using the provided `key`, writing the result to `output`.
         ///
-        /// `message` should be the message to encrypt, and `key` a [`Key`] generated randomly.
+        /// `message` should be the message to encrypt, and `key` a [`Key`] generated randomly using
+        /// [`Key::generate`].
         ///
-        /// The encrypted ciphertext will be written to `output`, which must be at least
-        /// [`MAC_LENGTH`] bytes longer than `message`. If the `output` slice is not sufficient to
-        /// store the ciphertext, an error will be returned.
+        /// `nonce` should be a [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) to use in
+        /// the encryption process. It is vital that nonces are never used for more than one message
+        /// under the same key. It is easiest to ensure this will be the case by generating a random
+        /// nonce for every message using [`generate_nonce`]. Nonces are not secret, but will need
+        /// to be communicated to the decrypting party for them to be able to decrypt the message.
         ///
-        /// This function will generate a random nonce, which is used in the encryption calculation
-        /// to ensure that the keystream cannot be revealed. Nonces must *never* be reused for
-        /// multiple messages with the same key. The nonce length for this cipher is sufficient
-        /// that a random nonce can be generated for every message, and the probability of nonce
-        /// reuse is essentially zero. The nonce will be required for decryption, so it should be
-        /// stored alongside the ciphertext, or somehow communicated to the decrypting party.
-        /// Nonces do not need to be kept secret.
+        /// The encrypted ciphertext will be written to `output`. The ciphertext will be
+        /// [`MAC_LENGTH`] bytes longer than `message`, so `output` must be of sufficient size to
+        /// store at least this many bytes. An error will be returned if `output` is not sufficient
+        /// to store the ciphertext.
         ///
-        /// Returns the nonce used, and the length of the ciphertext written to `output` (which
-        /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes.
+        /// If encryption is successful, returns the number of bytes written to `output` (this will
+        /// actually always be `message.len()` + [`MAC_LENGTH`] bytes).
         ///
         /// # Security Considerations
-        /// For the algorithms in this module, nonces must *never* be used more than once with the
-        /// same key. For this function, this should not be a concern, as a random nonce is
-        /// generated for every message encrypted.
-        ///
-        /// Nonces and MACs are not secret values, and can be transmitted in the clear.
+        /// Nonces must *never* be used more than once with the same key. You should generate a
+        /// random nonce for each message using [`generate_nonce`].
         pub fn encrypt(
-            message: &[u8],
-            key: &Key,
-            output: &mut [u8],
-        ) -> Result<(Nonce, usize), $crate::AlkaliError> {
-            let nonce = generate_nonce()?;
-            let c_len = encrypt_with_nonce(message, key, &nonce, output)?;
-
-            Ok((nonce, c_len))
-        }
-
-        /// Encrypt `message` using the provided `key` and `nonce`, writing the result to `output`.
-        ///
-        /// `message` should be the message to encrypt, and `key` a [`Key`] generated randomly.
-        ///
-        /// `nonce` should be the nonce to use. It is *vital* that a given nonce *never* be reused
-        /// with the same key. It is best to simply generate a random nonce for every message using
-        /// [`generate_nonce`]: The nonce length for this cipher is sufficient that the probability
-        /// of repeating a randomly generated nonce is effectively zero. The nonce will be required
-        /// for decryption, so it should be stored alongside the ciphertext, or somehow
-        /// communicated to the decrypting party. Nonces do not need to be kept secret. The
-        /// [`encrypt`] function automatically generates a random nonce for every message.
-        ///
-        /// The encrypted ciphertext will be written to `output`, which must be at least
-        /// [`MAC_LENGTH`] bytes longer than `message`. If the `output` slice is not sufficient to
-        /// store the ciphertext, an error will be returned.
-        ///
-        /// Returns the length of the ciphertext written to `output`, which will always be
-        /// `message.len()` + [`MAC_LENGTH`] bytes.
-        ///
-        /// # Security Considerations
-        /// For the algorithms in this module, nonces must *never* be used more than once with the
-        /// same key. Please ensure you never use a given nonce more than once with the same key:
-        /// Nonces for the algorithms here are sufficiently long that a nonce can be randomly
-        /// chosen for every message using [`generate_nonce`], and the probability of nonce reuse
-        /// will be effectively zero.
-        ///
-        /// Nonces and MACs are not secret values, and can be transmitted in the clear.
-        pub fn encrypt_with_nonce(
             message: &[u8],
             key: &Key,
             nonce: &Nonce,
@@ -261,170 +278,55 @@ macro_rules! cipher_module {
             let c_len = message.len() + MAC_LENGTH;
 
             if output.len() < c_len {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient(
-                    c_len,
-                    output.len(),
-                )
-                .into());
+                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
             } else if message.len() > *MESSAGE_LENGTH_MAX {
                 return Err($crate::symmetric::cipher::CipherError::MessageTooLong.into());
             }
 
-            unsafe {
-                // SAFETY: The first argument to this function is the destination pointer to which
-                // the ciphertext should be written. We verify above that the `output` slice is of
-                // sufficient size to store the message + auth tag, so a buffer overflow will not
-                // occur. The next two arguments specify the message to encrypt and its length. We
-                // use `message.len()` to specify the message length, so it is correct for this
-                // pointer. The final two arguments specify the nonce and key. We have defined the
-                // `Nonce` and `Key` types based on the `crypto_secretbox_NONCEBYTES` and
-                // `crypto_secretbox_KEYBYTES` constants, so they are of the expected size for use
-                // with this function.
+            let encrypt_result = unsafe {
+                // SAFETY: The first argument to this function is the destination to which the
+                // combined MAC + ciphertext will be written. The ciphertext will be of the same
+                // length as the message, and the MAC will always be `crypto_secretbox_MACBYTES`, so
+                // as long as the output pointer is valid for writes of `message.len() +
+                // crypto_secretbox_MACBYTES`, it is valid to use here. We verify this condition
+                // above, and return an error if the output is insufficient. The next two arguments
+                // specify the message to encrypt and its length. We use `message.len()` to specify
+                // the message length, so `message` is definitely valid for reads of this length.
+                // The next argument should be a pointer to the nonce to use for encryption. We have
+                // defined the `Nonce` type to be `crypto_secretbox_NONCEBYTES`, the size of a nonce
+                // for this algorithm, so it is valid for reads of the required length. The final
+                // argument for this function specifies the key with which the message should be
+                // encrypted. We have defined the `Key` type to allocate
+                // `crypto_secretbox_KEYBYTES`, the length of a key for this algorithm, so it is
+                // valid for reads of the required length. The `Key::inner` method simply returns an
+                // immutable pointer to its backing memory.
                 $encrypt(
                     output.as_mut_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
                     key.inner() as *const libc::c_uchar,
-                );
-            }
+                )
+            };
+            $crate::assert_not_err!(encrypt_result, stringify!($encrypt));
 
             Ok(c_len)
         }
 
-        /// Encrypt `message` using the provided `key`, writing the result to `output`, but not
-        /// prepending the MAC.
+        /// Decrypt `ciphertext` using the provided `key`, writing the result to `output`.
         ///
-        /// This function is very similar to the [`encrypt`] function. The difference is that the
-        /// standard [`encrypt`] function prepends the Message Authentication Code (MAC, used to
-        /// verify the authenticity of the ciphertext) to the ciphertext output, while this
-        /// function only writes the ciphertext to `output`, and separately returns the MAC.
+        /// `ciphertext` should be the combined ciphertext + MAC to decrypt (previously encrypted
+        /// using [`encrypt`]). `key` should be the the [`Key`] to use to decrypt the message.
+        /// `nonce` should be the [`Nonce`] which was used to encrypt the message.
         ///
-        /// `message` should be the message to encrypt, and `key` a [`Key`] generated randomly.
+        /// The decrypted plaintext will be written to `output`. The plaintext will be
+        /// [`MAC_LENGTH`] bytes shorter than `ciphertext`, so `output` must be of sufficient size
+        /// to store at least this many bytes. An error will be returned if `output` is not
+        /// sufficient to store the plaintext.
         ///
-        /// The encrypted ciphertext will be written to `output`, which must be at least
-        /// `message.len()` bytes long. If the `output` slice is not sufficient to store the
-        /// ciphertext, an error will be returned.
-        ///
-        /// This function will generate a random nonce, which is used in the encryption calculation
-        /// to ensure that the keystream cannot be revealed. Nonces must *never* be reused for
-        /// multiple messages with the same key. The nonce length for this cipher is sufficient
-        /// that a random nonce can be generated for every message, and the probability of nonce
-        /// reuse is essentially zero. The nonce will be required for decryption, so it should be
-        /// stored alongside the ciphertext, or somehow communicated to the decrypting party.
-        /// Nonces do not need to be kept secret.
-        ///
-        /// Returns the nonce used, and the calculated MAC.
-        ///
-        /// # Security Considerations
-        /// For the algorithms in this module, nonces must *never* be used more than once with the
-        /// same key. For this function, this should not be a concern, as a random nonce is
-        /// generated for every message encrypted.
-        ///
-        /// Nonces and MACs are not secret values, and can be transmitted in the clear.
-        pub fn encrypt_detached(
-            message: &[u8],
-            key: &Key,
-            output: &mut [u8],
-        ) -> Result<(Nonce, MAC), $crate::AlkaliError> {
-            let nonce = generate_nonce()?;
-            let mac = encrypt_detached_with_nonce(message, key, &nonce, output)?;
-
-            Ok((nonce, mac))
-        }
-
-        /// Encrypt `message` using the provided `key` and `nonce`, writing the result to `output`,
-        /// but not prepending the MAC.
-        ///
-        /// This function is very similar to the [`encrypt_with_nonce`] function. The difference is
-        /// that the standard [`encrypt_with_nonce`] function prepends the Message Authentication
-        /// Code (MAC, used to verify the authenticity of the ciphertext) to the ciphertext output,
-        /// while this function only writes the ciphertext to `output`, and separately returns the
-        /// MAC.
-        ///
-        /// `message` should be the message to encrypt, and `key` a [`Key`] generated randomly.
-        ///
-        /// `nonce` should be the nonce to use. It is *vital* that a given nonce *never* be reused
-        /// with the same key. It is best to simply generate a random nonce for every message using
-        /// [`generate_nonce`]: The nonce length for this cipher is sufficient that the probability
-        /// of repeating a randomly generated nonce is effectively zero. The nonce will be required
-        /// for decryption, so it should be stored alongside the ciphertext, or somehow
-        /// communicated to the decrypting party. Nonces do not need to be kept secret. The
-        /// [`encrypt`] function automatically generates a random nonce for every message.
-        ///
-        /// The encrypted ciphertext will be written to `output`, which must be at least
-        /// `message.len()` bytes long. If the `output` slice is not sufficient to
-        /// store the ciphertext, an error will be returned.
-        ///
-        /// Returns the calculated MAC for the ciphertext.
-        ///
-        /// # Security Considerations
-        /// For the algorithms in this module, nonces must *never* be used more than once with the
-        /// same key. Please ensure you never use a given nonce more than once with the same key:
-        /// Nonces for the algorithms here are sufficiently long that a nonce can be randomly
-        /// chosen for every message using [`generate_nonce`], and the probability of nonce reuse
-        /// will be effectively zero.
-        ///
-        /// Nonces and MACs are not secret values, and can be transmitted in the clear.
-        pub fn encrypt_detached_with_nonce(
-            message: &[u8],
-            key: &Key,
-            nonce: &Nonce,
-            output: &mut [u8],
-        ) -> Result<MAC, $crate::AlkaliError> {
-            $crate::require_init()?;
-
-            if output.len() < message.len() {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient(
-                    message.len(),
-                    output.len(),
-                )
-                .into());
-            } else if message.len() > *MESSAGE_LENGTH_MAX {
-                return Err($crate::symmetric::cipher::CipherError::MessageTooLong.into());
-            }
-
-            let mut mac = [0u8; MAC_LENGTH];
-
-            unsafe {
-                // SAFETY: The first argument to this function is the destination pointer to which
-                // the ciphertext should be written. We verify above that the `output` slice is of
-                // sufficient size to store the message tag, so a buffer overflow will not occur.
-                // The next argument is the destination to which the MAC for this ciphertext will
-                // be written. A MAC is always `crypto_secretbox_MACBYTES` bytes, and we have
-                // defined the `mac` buffer to be this length, so it is sufficient to store the
-                // MAC. The next two arguments specify the message to encrypt and its length. We
-                // use `message.len()` to specify the message length, so it is correct for this
-                // pointer. The final two arguments specify the nonce and key. We have defined the
-                // `Nonce` and `Key` types based on the `crypto_secretbox_NONCEBYTES` and
-                // `crypto_secretbox_KEYBYTES` constants, so they are of the expected size for use
-                // with this function.
-                $encrypt_d(
-                    output.as_mut_ptr(),
-                    mac.as_mut_ptr(),
-                    message.as_ptr(),
-                    message.len() as libc::c_ulonglong,
-                    nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
-                );
-            }
-
-            Ok(mac)
-        }
-
-        /// Try to decrypt `ciphertext` (previously encrypted using [`encrypt`]) using `key` and
-        /// `nonce`, writing the result to `output`.
-        ///
-        /// `ciphertext` should be a message to try to decrypt, `key` the [`Key`] the message is
-        /// believed to have been encrypted with, and `nonce` the [`Nonce`] the nonce the message
-        /// is believed to have been encrypted with.
-        ///
-        /// If authentication + decryption succeed, the decrypted message will be written to
-        /// `output`. `output` must be at least `ciphertext.len()` - [`MAC_LENGTH`] bytes,
-        /// otherwise an error will be returned.
-        ///
-        /// Returns the length of the plaintext written to `output`, which will always be
-        /// `ciphertext.len()` - [`MAC_LENGTH`] bytes.
+        /// Decryption will fail if message authentication fails. If decryption is successful, the
+        /// plaintext is written to `output`, and the length of the plaintext will be returned (this
+        /// will always be `ciphertext.len()` - [`MAC_LENGTH`] bytes.
         pub fn decrypt(
             ciphertext: &[u8],
             key: &Key,
@@ -440,24 +342,26 @@ macro_rules! cipher_module {
             let m_len = ciphertext.len() - MAC_LENGTH;
 
             if output.len() < m_len {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient(
-                    m_len,
-                    output.len(),
-                )
-                .into());
+                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
             }
 
             let decrypt_result = unsafe {
                 // SAFETY: The first argument to this function is the destination to which the
-                // original, decrypted message should be written to if decryption succeeds. This
-                // will occupy at most `ciphertext.len() - MAC_LENGTH` bytes, and we have verified
-                // above that `output` is of at least this length, so a buffer overflow cannot
-                // occur. The next two arguments specify the ciphertext to decrypt, and its length.
-                // We use `ciphertext.len()` to specify the length, so it is correct for this
-                // pointer. The final two arguments specify the nonce and key: We have defined the
-                // `Nonce` and `Key` types based on the `crypto_secretbox_NONCEBYTES` and
-                // `crypto_secretbox_KEYBYTES` constants, so they are of the expected size for use
-                // with this function.
+                // decrypted plaintext will be written. The plaintext will be
+                // `crypto_secretbox_MACBYTES` shorter than the ciphertext, so as long as the output
+                // pointer is valid for writes of `ciphertext.len() - crypto_secretbox_MACBYTES`, it
+                // is valid to use here. We verify this condition above, and return an error if the
+                // output is insufficient. The next two arguments specify the ciphertext to decrypt
+                // and its length. We use `ciphertext.len()` to specify the ciphertext length, so
+                // `ciphertext` is definitely valid for reads of this length. The next argument
+                // should be a pointer to the nonce to use for decryption. We have defined the
+                // `Nonce` type to be `crypto_secretbox_NONCEBYTES`, the size of a nonce for this
+                // algorithm, so it is valid for reads of the required length. The final argument
+                // for this function specifies the key with which the message should be decrypted.
+                // We have defined the `Key` type to allocate `crypto_secretbox_KEYBYTES`, the
+                // length of a key for this algorithm, so it is valid for reads of the required
+                // length. The `Key::inner` method simply returns an immutable pointer to its
+                // backing memory.
                 $decrypt(
                     output.as_mut_ptr(),
                     ciphertext.as_ptr(),
@@ -474,16 +378,98 @@ macro_rules! cipher_module {
             }
         }
 
-        /// Try to decrypt `ciphertext` (previously encrypted using [`encrypt_detached`]) using
-        /// `key` and `nonce`, writing the result to `output`.
+        /// Encrypt `message` using the provided `key`, writing the result to `output`, separately
+        /// returning the [`MAC`].
         ///
-        /// `ciphertext` should be a message to try to decrypt, `mac` the [`MAC`] (Message
-        /// Authentication Code) for this message, `key` the [`Key`] the message is believed to
-        /// have been encrypted with, and `nonce` the [`Nonce`] the nonce the message is believed
-        /// to have been encrypted with.
+        /// This function is very similar to the [`encrypt`] function. The difference is that the
+        /// standard [`encrypt`] function prepends the Message Authentication Code (MAC, used to
+        /// verify the authenticity of the ciphertext) to the ciphertext output, while this
+        /// function only writes the ciphertext to `output`, and separately returns the MAC.
         ///
-        /// If authentication + decryption succeed, the decrypted message will be written to
-        /// `output`. `output` must be at least `ciphertext.len()` bytes, otherwise, an error will
+        /// `message` should be the message to encrypt. `key` should be the [`Key`] to use for
+        /// encryption, generated randomly using [`Key::generate`].
+        ///
+        /// `nonce` should be a [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) to use in
+        /// the encryption process. It is vital that nonces are never used for more than one message
+        /// under the same key. It is easiest to ensure this will be the case by generating a random
+        /// nonce for every message using [`generate_nonce`]. Nonces are not secret, but will need
+        /// to be communicated to the decrypting party for them to be able to decrypt the message.
+        ///
+        /// The encrypted ciphertext will be written to `output`. The ciphertext will be the same
+        /// length as `message`, so `output` must be of sufficient size to store at least this many
+        /// bytes. An error will be returned if `output` is not sufficient to store the ciphertext.
+        ///
+        /// If encryption is successful, returns the number of bytes written to `output` (this will
+        /// actually always be `message.len()` bytes), and the authentication tag for the message (a
+        /// [`MAC`]).
+        ///
+        /// # Security Considerations
+        /// Nonces must *never* be used more than once with the same key. You should generate a
+        /// random nonce for each message using [`generate_nonce`].
+        pub fn encrypt_detached(
+            message: &[u8],
+            key: &Key,
+            nonce: &Nonce,
+            output: &mut [u8],
+        ) -> Result<(usize, MAC), $crate::AlkaliError> {
+            $crate::require_init()?;
+
+            if output.len() < message.len() {
+                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
+            } else if message.len() > *MESSAGE_LENGTH_MAX {
+                return Err($crate::symmetric::cipher::CipherError::MessageTooLong.into());
+            }
+
+            let mut mac = [0u8; MAC_LENGTH];
+
+            let encrypt_result = unsafe {
+                // SAFETY: The first argument to this function is the destination to which the
+                // ciphertext will be written. The ciphertext will be of the same length as the
+                // message, so as long as the output pointer is valid for writes of `message.len()`,
+                // it is valid to use here. We verify this condition above, and return an error if
+                // the output is insufficient. The next argument is the destination to which the MAC
+                // will be written. We define the `mac` array to be `crypto_secretbox_MACBYTES`, the
+                // length of a MAC for this algorithm, so it is valid for writes of the required
+                // length. The next two arguments specify the message to encrypt and its length. We
+                // use `message.len()` to specify the message length, so `message` is definitely
+                // valid for reads of this length. The next argument should be a pointer to the
+                // nonce to use for encryption. We have defined the `Nonce` type to be
+                // `crypto_secretbox_NONCEBYTES`, the size of a nonce for this algorithm, so it is
+                // valid for reads of the required length. The final argument for this function
+                // specifies the key with which the message should be encrypted. We have defined the
+                // `Key` type to allocate `crypto_secretbox_KEYBYTES`, the length of a key for this
+                // algorithm, so it is valid for reads of the required length. The `Key::inner`
+                // method simply returns an immutable pointer to its backing memory.
+                $encrypt_d(
+                    output.as_mut_ptr(),
+                    mac.as_mut_ptr(),
+                    message.as_ptr(),
+                    message.len() as libc::c_ulonglong,
+                    nonce.as_ptr(),
+                    key.inner() as *const libc::c_uchar,
+                )
+            };
+            $crate::assert_not_err!(encrypt_result, stringify!($encrypt_d));
+
+            Ok((message.len(), mac))
+        }
+
+        /// Decrypt `ciphertext` using the provided `key`, verifying the detached [`MAC`] and
+        /// writing the result to `output`.
+        ///
+        /// `ciphertext` should be the ciphertext to decrypt, and `mac` the [`MAC`] generated when
+        /// encrypting the ciphertext in detached mode with [`encrypt_detached`]. `nonce` should be
+        /// the [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) which was used to encrypt
+        /// the message.
+        ///
+        /// The decrypted plaintext will be written to `output`. The plaintext will be the same
+        /// length as `ciphertext`, so `output` must be of sufficient size to store at least this
+        /// many bytes. An error will be returned if `output` is not sufficient to store the
+        /// plaintext.
+        ///
+        /// Decryption will fail if message authentication fails. If decryption is successful, the
+        /// plaintext is written to `output`, and the length of the plaintext will be returned (this
+        /// will always be `ciphertext.len()` bytes).
         /// be returned.
         pub fn decrypt_detached(
             ciphertext: &[u8],
@@ -491,29 +477,31 @@ macro_rules! cipher_module {
             key: &Key,
             nonce: &Nonce,
             output: &mut [u8],
-        ) -> Result<(), $crate::AlkaliError> {
+        ) -> Result<usize, $crate::AlkaliError> {
             $crate::require_init()?;
 
             if output.len() < ciphertext.len() {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient(
-                    ciphertext.len(),
-                    output.len(),
-                )
-                .into());
+                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
             }
 
             let decrypt_result = unsafe {
                 // SAFETY: The first argument to this function is the destination to which the
-                // original, decrypted message should be written to if decryption succeeds. This
-                // will occupy at most `ciphertext.len()` bytes, and we have verified above that
-                // `output` is of at least this length, so a buffer overflow cannot occur. The next
-                // argument and the fourth argument two arguments specify the ciphertext to
-                // decrypt, and its length.  We use `ciphertext.len()` to specify the length, so it
-                // is correct for this pointer. The third argument, and the final two arguments,
-                // specify the MAC, nonce, and key: We have defined the `MAC`, `Nonce`, and `Key`
-                // types based on the `crypto_secretbox_MACBYTES`, `crypto_secretbox_NONCEBYTES`,
-                // and `crypto_secretbox_KEYBYTES` constants, so they are of the expected size for
-                // use with this function.
+                // decrypted plaintext will be written. The plaintext will be the same length as the
+                // ciphertext, so as long as the output pointer is valid for writes of
+                // `ciphertext.len()`, it is valid to use here. We verify this condition above, and
+                // return an error if the output is insufficient. The next three arguments specify
+                // the ciphertext to decrypt, the MAC, and the ciphertext length. We use
+                // `ciphertext.len()` to specify the ciphertext length, so `ciphertext` is
+                // definitely valid for reads of this length. The `MAC` type is defined to be
+                // `crypto_secretbox_MACBYTES`, the length of a MAC for this algorithm, so `mac` is
+                // valid for reads of the required length. The next argument should be a pointer to
+                // the nonce to use for decryption. We have defined the `Nonce` type to be
+                // `crypto_secretbox_NONCEBYTES`, the size of a nonce for this algorithm, so it is
+                // valid for reads of the required length. The final argument for this function
+                // specifies the key with which the message should be decrypted. We have defined the
+                // `Key` type to allocate `crypto_secretbox_KEYBYTES`, the length of a key for this
+                // algorithm, so it is valid for reads of the required length. The `Key::inner`
+                // method simply returns an immutable pointer to its backing memory.
                 $decrypt_d(
                     output.as_mut_ptr(),
                     ciphertext.as_ptr(),
@@ -525,7 +513,7 @@ macro_rules! cipher_module {
             };
 
             if decrypt_result == 0 {
-                Ok(())
+                Ok(ciphertext.len())
             } else {
                 Err($crate::symmetric::cipher::CipherError::DecryptionFailed.into())
             }
@@ -543,8 +531,7 @@ macro_rules! cipher_tests {
         mac: $mac:expr,
     }, )* ) => {
         use super::{
-            decrypt, decrypt_detached, encrypt, encrypt_with_nonce, encrypt_detached,
-            encrypt_detached_with_nonce, Key, MAC_LENGTH
+            decrypt, decrypt_detached, encrypt, encrypt_detached, generate_nonce, Key, MAC_LENGTH,
         };
         use $crate::random::fill_random;
         use $crate::AlkaliError;
@@ -573,20 +560,26 @@ macro_rules! cipher_tests {
             let mut c_c = [0; 1024 + MAC_LENGTH];
             let mut c_d = [0; (1 << 18) + MAC_LENGTH];
 
-            let (nonce_a, l_a) = encrypt(&msg_a, &key, &mut c_a)?;
-            let (nonce_b, l_b) = encrypt(&msg_b, &key, &mut c_b)?;
-            let (nonce_c, l_c) = encrypt(&msg_c, &key, &mut c_c)?;
-            let (nonce_d, l_d) = encrypt(&msg_d, &key, &mut c_d)?;
+            let nonce_a = generate_nonce()?;
+            let nonce_b = generate_nonce()?;
+            let nonce_c = generate_nonce()?;
+            let nonce_d = generate_nonce()?;
 
-            assert_eq!(l_a, MAC_LENGTH);
-            assert_eq!(l_b, 16 + MAC_LENGTH);
-            assert_eq!(l_c, 1024 + MAC_LENGTH);
-            assert_eq!(l_d, (1 << 18) + MAC_LENGTH);
+            assert_eq!(encrypt(&msg_a, &key, &nonce_a, &mut c_a)?, MAC_LENGTH);
+            assert_eq!(encrypt(&msg_b, &key, &nonce_b, &mut c_b)?, 16 + MAC_LENGTH);
+            assert_eq!(
+                encrypt(&msg_c, &key, &nonce_c, &mut c_c)?,
+                1024 + MAC_LENGTH
+            );
+            assert_eq!(
+                encrypt(&msg_d, &key, &nonce_d, &mut c_d)?,
+                (1 << 18) + MAC_LENGTH
+            );
 
-            decrypt(&c_a, &key, &nonce_a, &mut msg_a)?;
-            decrypt(&c_b, &key, &nonce_b, &mut msg_b)?;
-            decrypt(&c_c, &key, &nonce_c, &mut msg_c)?;
-            decrypt(&c_d, &key, &nonce_d, &mut msg_d)?;
+            assert_eq!(decrypt(&c_a, &key, &nonce_a, &mut msg_a)?, 0);
+            assert_eq!(decrypt(&c_b, &key, &nonce_b, &mut msg_b)?, 16);
+            assert_eq!(decrypt(&c_c, &key, &nonce_c, &mut msg_c)?, 1024);
+            assert_eq!(decrypt(&c_d, &key, &nonce_d, &mut msg_d)?, 1 << 18);
 
             fill_random(&mut c_a)?;
             fill_random(&mut c_b)?;
@@ -619,15 +612,30 @@ macro_rules! cipher_tests {
             let mut c_c = [0; 1024];
             let mut c_d = [0; (1 << 18)];
 
-            let (nonce_a, mut mac_a) = encrypt_detached(&msg_a, &key, &mut c_a)?;
-            let (nonce_b, mac_b) = encrypt_detached(&msg_b, &key, &mut c_b)?;
-            let (nonce_c, mac_c) = encrypt_detached(&msg_c, &key, &mut c_c)?;
-            let (nonce_d, mac_d) = encrypt_detached(&msg_d, &key, &mut c_d)?;
+            let nonce_a = generate_nonce()?;
+            let nonce_b = generate_nonce()?;
+            let nonce_c = generate_nonce()?;
+            let nonce_d = generate_nonce()?;
 
-            decrypt_detached(&c_a, &mac_a, &key, &nonce_a, &mut msg_a)?;
-            decrypt_detached(&c_b, &mac_b, &key, &nonce_b, &mut msg_b)?;
-            decrypt_detached(&c_c, &mac_c, &key, &nonce_c, &mut msg_c)?;
-            decrypt_detached(&c_d, &mac_d, &key, &nonce_d, &mut msg_d)?;
+            let (mut l_a, mut mac_a) = encrypt_detached(&msg_a, &key, &nonce_a, &mut c_a)?;
+            let (mut l_b, mac_b) = encrypt_detached(&msg_b, &key, &nonce_b, &mut c_b)?;
+            let (mut l_c, mac_c) = encrypt_detached(&msg_c, &key, &nonce_c, &mut c_c)?;
+            let (mut l_d, mac_d) = encrypt_detached(&msg_d, &key, &nonce_d, &mut c_d)?;
+
+            assert_eq!(l_a, 0);
+            assert_eq!(l_b, 16);
+            assert_eq!(l_c, 1024);
+            assert_eq!(l_d, 1 << 18);
+
+            l_a = decrypt_detached(&c_a, &mac_a, &key, &nonce_a, &mut msg_a)?;
+            l_b = decrypt_detached(&c_b, &mac_b, &key, &nonce_b, &mut msg_b)?;
+            l_c = decrypt_detached(&c_c, &mac_c, &key, &nonce_c, &mut msg_c)?;
+            l_d = decrypt_detached(&c_d, &mac_d, &key, &nonce_d, &mut msg_d)?;
+
+            assert_eq!(l_a, 0);
+            assert_eq!(l_b, 16);
+            assert_eq!(l_c, 1024);
+            assert_eq!(l_d, 1 << 18);
 
             fill_random(&mut mac_a)?;
             fill_random(&mut c_b)?;
@@ -650,7 +658,7 @@ macro_rules! cipher_tests {
                 key.copy_from_slice(&$key);
                 let mut c = vec![0; $msg.len() + MAC_LENGTH];
                 assert_eq!(
-                    encrypt_with_nonce(&$msg, &key, &$nonce, &mut c)?,
+                    encrypt(&$msg, &key, &$nonce, &mut c)?,
                     $msg.len() + MAC_LENGTH
                 );
                 assert_eq!(&c[..MAC_LENGTH], &$mac[..]);
@@ -670,11 +678,12 @@ macro_rules! cipher_tests {
             $(
                 key.copy_from_slice(&$key);
                 let mut c = vec![0; $msg.len()];
-                let mac = encrypt_detached_with_nonce(&$msg, &key, &$nonce, &mut c)?;
+                let (l, mac) = encrypt_detached(&$msg, &key, &$nonce, &mut c)?;
+                assert_eq!(l, $msg.len());
                 assert_eq!(&c, &$c);
                 assert_eq!(&mac, &$mac);
                 let mut m = vec![0; $msg.len()];
-                decrypt_detached(&c, &mac, &key, &$nonce, &mut m)?;
+                assert_eq!(decrypt_detached(&c, &mac, &key, &$nonce, &mut m)?, $msg.len());
                 assert_eq!(&m, &$msg);
             )*
 
@@ -683,7 +692,7 @@ macro_rules! cipher_tests {
     };
 }
 
-/// The [XSalsa20](https://en.wikipedia.org/wiki/Salsa20) cipher with a
+/// The [XSalsa20](https://cr.yp.to/snuffle.html) cipher with a
 /// [Poly1305](https://en.wikipedia.org/wiki/Poly1305) MAC.
 pub mod xsalsa20poly1305 {
     use libsodium_sys as sodium;
@@ -749,7 +758,7 @@ pub mod xsalsa20poly1305 {
     }
 }
 
-/// The [XChaCha20](https://en.wikipedia.org/wiki/Salsa20#ChaCha_variant) cipher with a
+/// The [XChaCha20](https://cr.yp.to/chacha.html) cipher with a
 /// [Poly1305](https://en.wikipedia.org/wiki/Poly1305) MAC.
 pub mod xchacha20poly1305 {
     use libsodium_sys as sodium;
