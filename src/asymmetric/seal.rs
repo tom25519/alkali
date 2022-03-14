@@ -33,6 +33,17 @@
 //! ephemeral_pk || cipher(message, recipient_pk, ephemeral_sk, nonce=blake2b(ephemeral_pk || recipient_pk))
 //! ```
 //!
+//! # Security Considerations
+//! The [`PrivateKey`] type stores the private key *unclamped* in memory. While the implementation
+//! always clamps it before use, other implementations may not do so, so if you choose to use keys
+//! generated here outside of Sodium, it must be clamped: See [this
+//! article](https://neilmadden.blog/2020/05/28/whats-the-curve25519-clamping-all-about/) for more
+//! information on the procedure.
+//!
+//! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
+//! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
+//! decryption via [`util::unpad`](crate::util::unpad).
+//!
 //! # Examples
 //! ```rust
 //! use alkali::asymmetric::seal;

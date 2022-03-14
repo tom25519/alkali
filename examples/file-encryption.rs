@@ -73,7 +73,7 @@ where
 
     // Read the file in chunks, and encrypt
     let mut buf_read = [0; CHUNK_SIZE];
-    let mut buf_write = [0; CHUNK_SIZE + cipher_stream::ADDED_LENGTH];
+    let mut buf_write = [0; CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH];
     'outer: loop {
         let mut read = 0;
 
@@ -123,12 +123,12 @@ where
     let mut stream = cipher_stream::DecryptionStream::new(&key, &header).unwrap();
 
     // Read the file in chunks, and decrypt
-    let mut buf_read = [0; CHUNK_SIZE + cipher_stream::ADDED_LENGTH];
+    let mut buf_read = [0; CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH];
     let mut buf_write = [0; CHUNK_SIZE];
     'outer: loop {
         let mut read = 0;
 
-        while read < CHUNK_SIZE + cipher_stream::ADDED_LENGTH {
+        while read < CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH {
             let current_read = source.read(&mut buf_read[read..]).unwrap();
 
             // Detect end of file, write final chunk

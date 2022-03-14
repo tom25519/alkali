@@ -32,6 +32,12 @@
 //! every message using [`generate_nonce`], and the probability of nonce reuse will be effectively
 //! zero.
 //!
+//! The [`PrivateKey`] type stores the private key *unclamped* in memory. While the implementation
+//! always clamps it before use, other implementations may not do so, so if you choose to use keys
+//! generated here outside of Sodium, it must be clamped: See [this
+//! article](https://neilmadden.blog/2020/05/28/whats-the-curve25519-clamping-all-about/) for more
+//! information on the procedure.
+//!
 //! In this construction, either party can both encrypt & decrypt messages, and compute a valid
 //! authentication tag for any encrypted message. Furthermore, the recipient must know the identity
 //! of the sender to receive and decrypt messages. If any of these factors are a concern, the
