@@ -26,7 +26,7 @@
 //! <!-- big ugly table -->
 //! | Alkali API | Corresponding Sodium API | Purpose |
 //! | ---------- | ------------------------ | ------- |
-//! | [`asymmetric::cipher`] | [`crypto_box`](https://doc.libsodium.org/public-key_cryptography/authenticated_encryption) | Encrypt a message for a specific party, so only you + them can decrypt it |
+//! | [`asymmetric::cipher`] | [`crypto_box`](https://doc.libsodium.org/public-key_cryptography/authenticated_encryption) | Encrypt a message for a specific party, so only you + they can decrypt it |
 //! | [`asymmetric::kx`] | [`crypto_kx`](https://doc.libsodium.org/key_exchange) | Establish a secret key with another party over an insecure channel |
 //! | [`asymmetric::sign`] | [`crypto_sign`](https://doc.libsodium.org/public-key_cryptography/public-key_signatures) | Sign a message, so that anyone can verify you sent it |
 //! | [`asymmetric::seal`] | [`crypto_box_seal`](https://doc.libsodium.org/public-key_cryptography/sealed_boxes) | Anonymously encrypt a message for a specific party, so only they can decrypt it |

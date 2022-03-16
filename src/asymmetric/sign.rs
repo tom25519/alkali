@@ -587,7 +587,7 @@ pub mod ed25519 {
                 sodium::crypto_sign_ed25519ph_final_create(
                     self.state.as_mut(),
                     signature.as_mut_ptr(),
-                    ptr::null::<libc::c_ulonglong>() as *mut libc::c_ulonglong,
+                    ptr::null_mut(),
                     keypair.private_key.inner() as *const libc::c_uchar,
                 )
             };
@@ -707,7 +707,7 @@ pub mod ed25519 {
             // returns an immutable pointer to its backing memory.
             sodium::crypto_sign_ed25519(
                 output.as_mut_ptr() as *mut libc::c_uchar,
-                ptr::null::<libc::c_ulonglong>() as *mut libc::c_ulonglong,
+                ptr::null_mut(),
                 message.as_ptr() as *const libc::c_uchar,
                 message.len() as libc::c_ulonglong,
                 keypair.private_key.inner() as *const libc::c_uchar,
@@ -745,7 +745,7 @@ pub mod ed25519 {
             // `PrivateKey::inner` method simply returns an immutable pointer to its backing memory.
             sodium::crypto_sign_ed25519_detached(
                 &mut signature as *mut libc::c_uchar,
-                ptr::null::<libc::c_ulonglong>() as *mut libc::c_ulonglong,
+                ptr::null_mut(),
                 message.as_ptr() as *const libc::c_uchar,
                 message.len() as libc::c_ulonglong,
                 keypair.private_key.inner() as *const libc::c_uchar,
@@ -790,8 +790,8 @@ pub mod ed25519 {
             // for a public key for this algorithm. Therefore, the public key can be read from
             // `keypair.public_key` without an over-read.
             sodium::crypto_sign_ed25519_open(
-                ptr::null::<libc::c_uchar>() as *mut libc::c_uchar,
-                ptr::null::<libc::c_ulonglong>() as *mut libc::c_ulonglong,
+                ptr::null_mut(),
+                ptr::null_mut(),
                 signed_message.as_ptr() as *const libc::c_uchar,
                 signed_message.len() as libc::c_ulonglong,
                 public_key as *const libc::c_uchar,
