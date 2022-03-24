@@ -9,6 +9,10 @@ license = "MIT OR Apache-2.0"
 keywords = ["cryptography", "libsodium", "nacl", "sodium"]
 categories = ["api-bindings", "cryptography"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "doc_cfg"]
+
 [dependencies]
 lazy_static = "1.4.0"
 libc = { version = "0.2.119", default-features = false }
@@ -19,3 +23,8 @@ thiserror = "1.0.30"
 [dev-dependencies]
 rand = "0.8.5"
 rpassword = "5.0.1"
+
+[features]
+hazmat = ["onetimeauth", "sha2"]
+onetimeauth = []
+sha2 = []

@@ -12,5 +12,7 @@
 pub mod generic;
 pub mod kdf;
 pub mod pbkdf;
+#[cfg(feature = "sha2")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
 pub mod sha2;
 pub mod short;

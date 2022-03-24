@@ -61,6 +61,24 @@
 //! the time being, we have to do a fair amount of manual memory management under the hood to
 //! enable them to work. Regardless, these implementation details do not require you to do anything
 //! differently yourself.
+//!
+//! # The `hazmat` Feature
+//! Sodium is generally intended to be difficult to misuse, but some constructions are inherently
+//! more prone to misuse/misunderstanding than others, and more care is required to use them
+//! securely. As an example, for the [`crypto_onetimeauth`
+//! API](https://doc.libsodium.org/advanced/poly1305), using a given key to authenticate more than
+//! one message can result in an attacker recovering the key.
+//!
+//! In alkali, these modules are feature-gated behind the `hazmat` feature, and will not be
+//! available unless it is enabled. This can be done from `Cargo.toml`, and is just intended as an
+//! extra step to confirm, "Yes, I know what I am doing is error-prone, and I have thoroughly read
+//! the accompanying documentation":
+//!
+//! ```toml
+//! alkali = { version = "0.1", features = ["hazmat"] }
+//! ```
+
+#![cfg_attr(doc_cfg, feature(doc_cfg))]
 
 use libsodium_sys as sodium;
 use thiserror::Error;
