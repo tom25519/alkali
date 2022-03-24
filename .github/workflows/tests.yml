@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 env:
   RUSTFLAGS: '-Dwarnings'
-  RUSTDOCFLAGS: '-Drustdoc::broken_intra_doc_links'
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -36,11 +35,17 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - run: ${{ matrix.deps }}
         if: ${{ matrix.deps }}
-      - run: cargo test --target ${{ matrix.target }}
-      - run: cargo test --release --target ${{ matrix.target }}
+      - run: cargo test --all-features --target ${{ matrix.target }}
+      - run: cargo test --release --all-features --target ${{ matrix.target }}
 
   docs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - run: cargo doc
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+    - run: cargo doc --all-features
+      env:
+        RUSTDOCFLAGS: '-Drustdoc::broken_intra_doc_links --cfg doc_cfg'
