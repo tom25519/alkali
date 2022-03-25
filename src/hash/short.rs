@@ -3,18 +3,20 @@
 //! This module corresponds to the [`crypto_shorthash`
 //! API](https://doc.libsodium.org/hashing/short-input_hashing) from Sodium.
 //!
-//! This is a fast, keyed [cryptographic hash
-//! function](https://en.wikipedia.org/wiki/Cryptographic_hash_function), intended for use in
-//! hash-based data structures such as hash tables and bloom filters. This is specifically to
-//! address DOS attacks which exploit predictable collisions in non-cryptographic hash functions.
-//! In hash tables for example, if many keys hash to the same value, the computational complexity
-//! of all operations increases. An attacker can easily find cause the insertion of many keys which
-//! hash to the same value, they can cause greatly increased load compared to normal operation.
+//! This is a fast, keyed hash function, intended for use in hash-based data structures such as hash
+//! tables and bloom filters. This specifically addresses a class of Denial of Service (DOS) attacks
+//! which exploit predictable collisions in many hash functions which would previously have been
+//! used for this task. In hash tables for example, if many keys hash to the same value, the
+//! computational complexity of all operations increases. An attacker can easily find cause the
+//! insertion of many keys which hash to the same value, they can cause greatly increased load
+//! compared to normal operation.
 //!
-//! The hash function in this API resists this attack by using a secret key in this hash
+//! The hash function in this API resists this attack as it uses a secret key in the hash
 //! calculation. While the short output of the hash means it is not collision-resistant, as long as
-//! an attacker does not know the key, the output of the function is unpredictable, so they should
-//! not be able to devise collisions.
+//! an attacker does not know the key, they should not be able to find collisions any faster than
+//! brute-force search.
+//!
+//! The hash function in this module is optimised for small input sizes.
 //!
 //! # Algorithm Details
 //! [SipHash-2-4](siphash24) ([SipHash](https://en.wikipedia.org/wiki/SipHash) with 2 rounds per
@@ -24,6 +26,14 @@
 //! # Security Considerations
 //! This hash function is not suitable as a general-purpose hash function due to the short output
 //! size. Instead consider using [`hash::generic`](super::generic).
+//!
+//! ## Secret Data
+//! * The [`Key`] used with this hash function must be kept secret. If an attacker knows the key,
+//!   this function provides no defense against DOS attacks.
+//!
+//! ## Non-Secret Data
+//! * The output of the hash function (the [`Digest`]) is not secret. It is not possible to find the
+//!   key from the output.
 //!
 //! # Examples
 //! ```rust
@@ -49,23 +59,27 @@ macro_rules! short_module {
         $key_len:expr,      // crypto_shorthash_KEYBYTES
         $shorthash:path,    // crypto_shorthash
     ) => {
-        /// The length of a key used to secure the hash, in bytes.
+        /// The length of a key for this hash function, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
 
-        /// The output size of the hash function, in bytes.
+        /// The output size of this hash function, in bytes.
         pub const DIGEST_LENGTH: usize = $digest_len as usize;
 
         $crate::hardened_buffer! {
             /// Secret key used to secure the hash function.
             ///
-            /// There are no technical constraints on the contents of a key, but it should be
-            /// generated randomly using [`Key::generate`].
+            /// There are no *technical* constraints on the contents of a key, but it should be
+            /// indistinguishable from random noise. A random key can be securely generated using
+            /// [`Key::generate`].
             ///
             /// A secret key should not be made public.
             ///
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
-            /// its contents.
+            /// its contents. This type in particular can be thought of as roughly equivalent to a
+            /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
+            /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
+            /// [secure memory utilities](https://doc.libsodium.org/memory_management).
             Key(KEY_LENGTH);
         }
 
@@ -92,22 +106,25 @@ macro_rules! short_module {
 
             let mut digest = [0u8; DIGEST_LENGTH];
 
-            unsafe {
-                // SAFETY: The first parameter to this function specifies the destination pointer
-                // to which the hash will be written. This is expected to be crypto_shorthash_BYTES
-                // bytes in length. We have defined `digest` above to be this size, so it is what
-                // is correct for use in this function. The next two parameters specify the message
-                // to hash and its length. We use `message.len()` to specify the length, so it is
-                // correct for the `message` slice. The final parameter specifies the key to use
-                // for the hash. We have defined the `Key` type to be `crypto_shorthash_KEYBYTES`
-                // bytes long, so it is the expected size for this function.
+            let hash_result = unsafe {
+                // SAFETY: The first argument to this function is the destination to which the
+                // digest, of length `crypto_shorthash_BYTES`, will be written. We have defined the
+                // `digest` array to be `crypto_shorthash_BYTES` bytes in length, so it is valid for
+                // writes of the required length. The next two arguments specify a pointer to the
+                // message to hash, and the message length. We use `message.len()` to specify the
+                // length of the message, so `message` is definitely valid for reads of the required
+                // length. The final argument is a pointer to the key. The `Key` type is defined to
+                // allocate `crypto_shorthash_KEYBYTES`, the length of a key for this algorithm, so
+                // `key` is valid for reads of the required length. The `Key::inner` method simply
+                // returns a pointer to its backing memory.
                 $shorthash(
                     digest.as_mut_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     key.inner() as *const libc::c_uchar,
-                );
-            }
+                )
+            };
+            $crate::assert_not_err!(hash_result, stringify!($shorthash));
 
             Ok(digest)
         }
