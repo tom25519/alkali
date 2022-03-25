@@ -46,6 +46,7 @@ jobs:
       with:
         toolchain: nightly
         override: true
+    - uses: Swatinem/rust-cache@v1
     - run: cargo doc --all-features
       env:
         RUSTDOCFLAGS: '-Drustdoc::broken_intra_doc_links --cfg doc_cfg'

@@ -190,6 +190,8 @@ pub enum AlkaliError {
     CipherStreamError(#[from] symmetric::cipher_stream::CipherStreamError),
 
     /// An error occurred in the [`symmetric::one_time_auth`] module.
+    #[cfg(feature = "onetimeauth")]
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
     #[error("one-time authentication error")]
     OneTimeAuthError(#[from] symmetric::one_time_auth::OneTimeAuthError),
 }
