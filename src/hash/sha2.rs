@@ -58,14 +58,14 @@
 //! let mut state_a = sha2::Multipart::new().unwrap();
 //! state_a.update(b"Here's the first part");
 //! state_a.update(b"... And the second!");
-//! let hash_a = state_a.calculate_hash();
+//! let hash_a = state_a.calculate();
 //!
 //! let mut state_b = sha2::Multipart::new().unwrap();
 //! state_b.update(b"Here");
 //! state_b.update(b"'s the first ");
 //! state_b.update(b"part... And the ");
 //! state_b.update(b"second!");
-//! let hash_b = state_b.calculate_hash();
+//! let hash_b = state_b.calculate();
 //!
 //! assert_eq!(hash_a, hash_b);
 //! ```
@@ -215,8 +215,11 @@ macro_rules! sha2_module {
                 $crate::assert_not_err!(update_result, stringify!($mp_update));
             }
 
-            /// Calculate the hash of the concatenated message contents.
-            pub fn calculate_hash(mut self) -> Digest {
+            /// Finalise the hash state, returning the digest.
+            ///
+            /// This method is not marked public since we want to use the type system to ensure the
+            /// `Multipart` struct cannot be used again after being finalised.
+            fn finalise(&mut self) -> Digest {
                 // We do not use `require_init` here, as it must be called to initialise a
                 // `Multipart` struct.
 
@@ -236,6 +239,22 @@ macro_rules! sha2_module {
                 $crate::assert_not_err!(finalise_result, stringify!($mp_final));
 
                 digest
+            }
+
+            /// Calculate the hash of the concatenated message contents.
+            pub fn calculate(mut self) -> Digest {
+                self.finalise()
+            }
+
+            /// Compare the hash of the specified message to another hash, returning `true` if the
+            /// message hashes to the given value, and `false` otherwise.
+            ///
+            /// `digest` is the hash against which the message will be compared.
+            ///
+            /// This comparison runs in constant time.
+            pub fn compare(mut self, digest: &Digest) -> bool {
+                let actual_digest = self.finalise();
+                $crate::util::eq(digest, &actual_digest).unwrap()
             }
         }
 
@@ -322,7 +341,9 @@ macro_rules! sha2_tests {
                 $(
                     let mut state = Multipart::new()?;
                     state.update($msg);
-                    let digest = state.calculate_hash();
+                    let state_b = state.try_clone()?;
+                    assert!(state_b.compare(&$out));
+                    let digest = state.calculate();
                     assert_eq!(digest, $out);
                 )*
 
@@ -332,7 +353,9 @@ macro_rules! sha2_tests {
                     let boundary = random::random_u32_in_range(0, $msg.len() as u32)? as usize;
                     state.update(&$msg[..boundary]);
                     state.update(&$msg[boundary..]);
-                    let digest = state.calculate_hash();
+                    let state_b = state.try_clone()?;
+                    assert!(state_b.compare(&$out));
+                    let digest = state.calculate();
                     assert_eq!(digest, $out);
                 )*
 
@@ -344,7 +367,9 @@ macro_rules! sha2_tests {
                     state.update(&$msg[..boundary_a]);
                     state.update(&$msg[boundary_a..boundary_b]);
                     state.update(&$msg[boundary_b..]);
-                    let digest = state.calculate_hash();
+                    let state_b = state.try_clone()?;
+                    assert!(state_b.compare(&$out));
+                    let digest = state.calculate();
                     assert_eq!(digest, $out);
                 )*
             }

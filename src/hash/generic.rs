@@ -508,6 +508,16 @@ pub mod blake2b {
             self.finalise(output)
         }
 
+        /// Calculate the hash for the specified message and return it as a `Vec<u8>`.
+        ///
+        /// The returned vector will be the same length specified when instantiating the struct with
+        /// [`Multipart::new`] or [`Multipart::new_keyed`].
+        pub fn calculate_to_vec(mut self) -> Result<Vec<u8>, AlkaliError> {
+            let mut output = vec![0u8; self.output_len];
+            self.finalise(&mut output)?;
+            Ok(output)
+        }
+
         /// Compare the hash of the specified message to another hash, returning true if the message
         /// hashes to the given value, and false otherwise.
         ///
@@ -656,6 +666,46 @@ pub mod blake2b {
         assert_not_err!(hash_result, "crypto_generichash_blake2b");
 
         Ok(())
+    }
+
+    /// Calculate the hash of the provided message, returning a digest of a custom length stored in
+    /// a vector.
+    ///
+    /// The [`hash`] function will always output a hash of the default size,
+    /// [`DIGEST_LENGTH_DEFAULT`]. This function allows the user to specify a custom output size, if
+    /// this is necessary for your use case.
+    ///
+    /// A `key` may optionally be provided. If no key is provided, the unkeyed variant of BLAKE2b
+    /// will be used, and the same message will always produce the same hash. If a key is provided,
+    /// it will be used as part of the hash calculation. The same `(message, key)` pair will always
+    /// produce the same hash, but a message hashed with a different keys will likely produce a
+    /// different hash. The `key` may be of any length up to [`KEY_LENGTH_MAX`], but please see the
+    /// security considerations section below.
+    ///
+    /// The hash of `message` will be `digest_len` bytes, which must be between
+    /// [`DIGEST_LENGTH_MIN`] and [`DIGEST_LENGTH_MAX`] bytes. This hash will be returned as a vector.
+    ///
+    /// # Security Considerations
+    /// The output size of this function is user-configurable. However, digest lengths below
+    /// [`DIGEST_LENGTH_DEFAULT`] may not preserve the expected property of collision resistance. If
+    /// such a digest size is used, the function should no longer be treated as a cryptographic hash
+    /// function. Only use an output length below [`DIGEST_LENGTH_DEFAULT`] if doing so is
+    /// absolutely necessary for your use-case.
+    ///
+    /// If a key is used in the hash calculation, the key length must be chosen carefully. If the
+    /// key is not a secret value, and is just being used to produce different hashes in different
+    /// contexts, the key can be of any length. However, if the key is intended to be secret
+    /// (thereby turning the hash into a MAC), it must be at least [`KEY_LENGTH_MIN`] bytes long.
+    /// Shorter keys are insufficient to be cryptographic secrets. It is recommended to use a key of
+    /// at least [`KEY_LENGTH_DEFAULT`] bytes, and the [`Key`] type exists for this purpose.
+    pub fn hash_custom_to_vec(
+        message: &[u8],
+        key: Option<&[u8]>,
+        digest_len: usize,
+    ) -> Result<Vec<u8>, AlkaliError> {
+        let mut digest = vec![0; digest_len];
+        hash_custom(message, key, &mut digest)?;
+        Ok(digest)
     }
 
     #[cfg(test)]
