@@ -59,13 +59,14 @@ macro_rules! short_module {
         $key_len:expr,      // crypto_shorthash_KEYBYTES
         $shorthash:path,    // crypto_shorthash
     ) => {
+        use $crate::{assert_not_err, hardened_buffer, random, require_init, AlkaliError};
         /// The length of a key for this hash function, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
 
         /// The output size of this hash function, in bytes.
         pub const DIGEST_LENGTH: usize = $digest_len as usize;
 
-        $crate::hardened_buffer! {
+        hardened_buffer! {
             /// Secret key used to secure the hash function.
             ///
             /// There are no *technical* constraints on the contents of a key, but it should be
@@ -85,9 +86,9 @@ macro_rules! short_module {
 
         impl Key {
             /// Generate a new, random key for use with this hash.
-            pub fn generate() -> Result<Self, $crate::AlkaliError> {
+            pub fn generate() -> Result<Self, AlkaliError> {
                 let mut key = Self::new_empty()?;
-                $crate::random::fill_random(&mut key[..])?;
+                random::fill_random(&mut key[..])?;
                 Ok(key)
             }
         }
@@ -101,8 +102,8 @@ macro_rules! short_module {
         /// This function returns the hash of the given message, dependent on the provided `key`.
         /// The same `(message, key)` combination will always produce the same hash. A different
         /// key will produce a different hash for the same message.
-        pub fn hash(message: &[u8], key: &Key) -> Result<Digest, $crate::AlkaliError> {
-            $crate::require_init()?;
+        pub fn hash(message: &[u8], key: &Key) -> Result<Digest, AlkaliError> {
+            require_init()?;
 
             let mut digest = [0u8; DIGEST_LENGTH];
 
@@ -124,7 +125,7 @@ macro_rules! short_module {
                     key.inner() as *const libc::c_uchar,
                 )
             };
-            $crate::assert_not_err!(hash_result, stringify!($shorthash));
+            assert_not_err!(hash_result, stringify!($shorthash));
 
             Ok(digest)
         }
@@ -139,14 +140,16 @@ macro_rules! short_module_tests {
         key:  $key:expr,
         hash: $hash:expr,
     }, )* ) => {
+        use $crate::AlkaliError;
+
         #[test]
-        fn key_generation() -> Result<(), $crate::AlkaliError> {
+        fn key_generation() -> Result<(), AlkaliError> {
             let _key = super::Key::generate()?;
             Ok(())
         }
 
         #[test]
-        fn test_vectors() -> Result<(), $crate::AlkaliError> {
+        fn test_vectors() -> Result<(), AlkaliError> {
             let mut key = super::Key::new_empty()?;
 
             $(

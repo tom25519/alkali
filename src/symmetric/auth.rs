@@ -136,6 +136,11 @@ macro_rules! auth_module {
         $mp_update:path,    // crypto_auth_update
         $mp_final:path,     // crypto_auth_final
     ) => {
+        use $crate::symmetric::auth::AuthError;
+        use $crate::{
+            assert_not_err, hardened_buffer, mem, require_init, unexpected_err, util, AlkaliError,
+        };
+
         /// The length of a symmetric key for message authentication, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
 
@@ -145,7 +150,7 @@ macro_rules! auth_module {
         /// length.
         pub const TAG_LENGTH: usize = $tag_len as usize;
 
-        $crate::hardened_buffer! {
+        hardened_buffer! {
             /// A secret key for symmetric message authentication.
             ///
             /// There are no *technical* constraints on the contents of a key, but it should be
@@ -165,8 +170,8 @@ macro_rules! auth_module {
 
         impl Key {
             /// Generate a new, random key for use in symmetric message authentication.
-            pub fn generate() -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn generate() -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut key = Self::new_empty()?;
                 unsafe {
@@ -215,8 +220,8 @@ macro_rules! auth_module {
             ///
             /// The provided [`Key`] should be the shared symmetric key to use for
             /// authentication/verification.
-            pub fn new(key: &Key) -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn new(key: &Key) -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut state = unsafe {
                     // SAFETY: This call to malloc() will allocate the memory required for a
@@ -227,7 +232,7 @@ macro_rules! auth_module {
                     // in any other place in this struct, and drop can only be called once, so a
                     // double-free is not possible. We never expose a pointer to the allocated
                     // memory directly. See the drop implementation for more reasoning on safety.
-                    $crate::mem::malloc()?
+                    mem::malloc()?
                 };
 
                 let init_result = unsafe {
@@ -260,9 +265,9 @@ macro_rules! auth_module {
                         // free it here. The `unexpected_err!` macro below will always panic, so
                         // this function will not return, and an instance of `Self` is never
                         // initialised, preventing a double-free or use-after-free.
-                        $crate::mem::free(state);
+                        mem::free(state);
                     }
-                    $crate::unexpected_err!(stringify!($mp_init));
+                    unexpected_err!(stringify!($mp_init));
                 }
 
                 Ok(Self {
@@ -279,7 +284,7 @@ macro_rules! auth_module {
             ///
             /// The same [`Key`] used to initialise the original [`Multipart`] instance will be used
             /// to authenticate any data added to the new instance.
-            pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
+            pub fn try_clone(&self) -> Result<Self, AlkaliError> {
                 // We do not use `require_init` here, as it must be called to initialise a
                 // `Multipart` struct.
 
@@ -291,7 +296,7 @@ macro_rules! auth_module {
                     // and drop can only be called once, so a double-free is not possible. We never
                     // expose a pointer to the allocated memory directly. See the drop
                     // implementation for more reasoning on safety.
-                    let mut state = $crate::mem::malloc()?;
+                    let mut state = mem::malloc()?;
 
                     // SAFETY: We have called `malloc` to allocate sufficient space for one
                     // `crypto_auth_state` struct at each of the two pointers used here:
@@ -338,7 +343,7 @@ macro_rules! auth_module {
                     )
                 };
 
-                $crate::assert_not_err!(update_result, stringify!($mp_update));
+                assert_not_err!(update_result, stringify!($mp_update));
             }
 
             /// Calculate the authentication tag for the specified message.
@@ -367,7 +372,7 @@ macro_rules! auth_module {
                     // for writes of the expected size for this function.
                     $mp_final(self.state.as_mut(), tag.as_mut_ptr())
                 };
-                $crate::assert_not_err!(finalise_result, stringify!($mp_final));
+                assert_not_err!(finalise_result, stringify!($mp_final));
 
                 tag
             }
@@ -379,7 +384,7 @@ macro_rules! auth_module {
             /// authentication tag failed.
             ///
             /// Equivalent to [`verify`] for single-part messages.
-            pub fn verify(mut self, tag: &Tag) -> Result<(), $crate::AlkaliError> {
+            pub fn verify(mut self, tag: &Tag) -> Result<(), AlkaliError> {
                 // We do not use `require_init` here, as it must be called to initialise a
                 // `Multipart` struct.
 
@@ -396,12 +401,12 @@ macro_rules! auth_module {
                     // long, so it is valid for writes of the expected size for this function.
                     $mp_final(self.state.as_mut(), actual_tag.as_mut_ptr())
                 };
-                $crate::assert_not_err!(finalise_result, stringify!($mp_final));
+                assert_not_err!(finalise_result, stringify!($mp_final));
 
-                if $crate::util::eq(tag, &actual_tag)? {
+                if util::eq(tag, &actual_tag)? {
                     Ok(())
                 } else {
-                    Err($crate::symmetric::auth::AuthError::AuthenticationFailed.into())
+                    Err(AuthError::AuthenticationFailed.into())
                 }
             }
         }
@@ -432,7 +437,7 @@ macro_rules! auth_module {
                     //     called, and the memory freed.
                     // `self.state` was allocated in the `Multipart` constructor using Sodium's
                     // allocator, so it is correct to free it using Sodium's allocator.
-                    $crate::mem::free(self.state);
+                    mem::free(self.state);
                 }
             }
         }
@@ -443,8 +448,8 @@ macro_rules! auth_module {
         /// Do not use this function to *verify* an existing authentication tag for a message, as
         /// naïve comparison of authentication tags gives rise to a timing attack. Instead, use
         /// the [`verify`] function, which verifies an authentication tag in constant time.
-        pub fn authenticate(message: &[u8], key: &Key) -> Result<Tag, $crate::AlkaliError> {
-            $crate::require_init()?;
+        pub fn authenticate(message: &[u8], key: &Key) -> Result<Tag, AlkaliError> {
+            require_init()?;
 
             let mut tag = [0u8; TAG_LENGTH];
 
@@ -467,7 +472,7 @@ macro_rules! auth_module {
                     key.inner() as *const libc::c_uchar,
                 )
             };
-            $crate::assert_not_err!(auth_result, stringify!($authenticate));
+            assert_not_err!(auth_result, stringify!($authenticate));
 
             Ok(tag)
         }
@@ -478,8 +483,8 @@ macro_rules! auth_module {
         /// Returns an [`AuthError::AuthenticationFailed`](
         /// crate::symmetric::auth::AuthError::AuthenticationFailed) if verification of the
         /// authentication tag failed.
-        pub fn verify(message: &[u8], tag: &Tag, key: &Key) -> Result<(), $crate::AlkaliError> {
-            $crate::require_init()?;
+        pub fn verify(message: &[u8], tag: &Tag, key: &Key) -> Result<(), AlkaliError> {
+            require_init()?;
 
             let verification_result = unsafe {
                 // SAFETY: This function takes a pointer to the tag to be verified, a pointer to the
@@ -503,7 +508,7 @@ macro_rules! auth_module {
             if verification_result == 0 {
                 Ok(())
             } else {
-                Err($crate::symmetric::auth::AuthError::AuthenticationFailed.into())
+                Err(AuthError::AuthenticationFailed.into())
             }
         }
     };

@@ -134,6 +134,7 @@ macro_rules! seal_module {
         $decrypt:path,          // crypto_box_seal_open
     ) => {
         use $crate::asymmetric::seal::SealError;
+        use $crate::{assert_not_err, hardened_buffer, require_init, AlkaliError};
 
         /// The length of a private key for asymmetric AE, in bytes.
         pub const PRIVATE_KEY_LENGTH: usize = $private_key_len as usize;
@@ -156,7 +157,7 @@ macro_rules! seal_module {
             };
         }
 
-        $crate::hardened_buffer! {
+        hardened_buffer! {
             /// A private key used in asymmetric AE.
             ///
             /// A private key forms one half of a [`Keypair`], together with a [`PublicKey`].
@@ -202,8 +203,8 @@ macro_rules! seal_module {
 
         impl PrivateKey {
             /// Derive the public key corresponding to this private key.
-            pub fn public_key(&self) -> Result<PublicKey, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn public_key(&self) -> Result<PublicKey, AlkaliError> {
+                require_init()?;
 
                 let mut public_key = [0; PUBLIC_KEY_LENGTH];
                 unsafe {
@@ -256,8 +257,8 @@ macro_rules! seal_module {
             ///
             /// A keypair consists of a [`PrivateKey`], which must be kept secret, and a
             /// [`PublicKey`], which should be made public.
-            pub fn generate() -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn generate() -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut private_key = PrivateKey::new_empty()?;
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
@@ -278,7 +279,7 @@ macro_rules! seal_module {
                         private_key.inner_mut() as *mut libc::c_uchar,
                     )
                 };
-                $crate::assert_not_err!(keypair_result, stringify!($keypair));
+                assert_not_err!(keypair_result, stringify!($keypair));
 
                 Ok(Self {
                     private_key,
@@ -292,8 +293,8 @@ macro_rules! seal_module {
             ///
             /// A keypair consists of a [`PrivateKey`], which must be kept secret, and a
             /// [`PublicKey`], which should be made public.
-            pub fn from_seed(seed: &Seed) -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn from_seed(seed: &Seed) -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut private_key = PrivateKey::new_empty()?;
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
@@ -318,7 +319,7 @@ macro_rules! seal_module {
                         seed.inner() as *const libc::c_uchar,
                     )
                 };
-                $crate::assert_not_err!(keypair_result, stringify!($seed_keypair));
+                assert_not_err!(keypair_result, stringify!($seed_keypair));
 
                 Ok(Self {
                     private_key,
@@ -332,8 +333,8 @@ macro_rules! seal_module {
             /// the public key associated with the provided private key and stores both in a
             /// [`Keypair`]. This is useful if you know your private key, but don't have the
             /// corresponding public key.
-            pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
 
@@ -356,7 +357,7 @@ macro_rules! seal_module {
                         private_key.inner() as *const libc::c_uchar,
                     )
                 };
-                $crate::assert_not_err!(scalarmult_result, stringify!($scalarmult_base));
+                assert_not_err!(scalarmult_result, stringify!($scalarmult_base));
 
                 Ok(Self {
                     private_key: private_key.try_clone()?,
@@ -386,8 +387,8 @@ macro_rules! seal_module {
             message: &[u8],
             receiver: &PublicKey,
             output: &mut [u8],
-        ) -> Result<usize, $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<usize, AlkaliError> {
+            require_init()?;
 
             let c_len = message.len() + OVERHEAD_LENGTH;
 
@@ -438,8 +439,8 @@ macro_rules! seal_module {
             ciphertext: &[u8],
             keypair: &Keypair,
             output: &mut [u8],
-        ) -> Result<usize, $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<usize, AlkaliError> {
+            require_init()?;
 
             if ciphertext.len() < OVERHEAD_LENGTH {
                 return Err(SealError::DecryptionFailed.into());

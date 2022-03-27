@@ -81,6 +81,8 @@ macro_rules! sha2_module {
         $mp_update:path,    // crypto_hash_update
         $mp_final:path,     // crypto_hash_final
     ) => {
+        use $crate::{assert_not_err, mem, require_init, unexpected_err, util, AlkaliError};
+
         /// The length of the output of this hash function, in bytes.
         pub const DIGEST_LENGTH: usize = $digest_len as usize;
 
@@ -101,8 +103,8 @@ macro_rules! sha2_module {
 
         impl Multipart {
             /// Create a new instance of the struct.
-            pub fn new() -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn new() -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut state = unsafe {
                     // SAFETY: This call to malloc() will allocate the memory required for a
@@ -113,7 +115,7 @@ macro_rules! sha2_module {
                     // in any other place in this struct, and drop can only be called once, so a
                     // double-free is not possible. We never expose a pointer to the allocated
                     // memory directly. See the drop implementation for more reasoning on safety.
-                    $crate::mem::malloc()?
+                    mem::malloc()?
                 };
 
                 let init_result = unsafe {
@@ -138,9 +140,9 @@ macro_rules! sha2_module {
                         // free it here. The `unexpected_err!` macro below will always panic, so
                         // this function will not return, and an instance of `Self` is never
                         // initialised, preventing a double-free or use-after-free.
-                        $crate::mem::free(state);
+                        mem::free(state);
                     }
-                    $crate::unexpected_err!(stringify!($mp_init));
+                    unexpected_err!(stringify!($mp_init));
                 }
 
                 Ok(Self {
@@ -154,7 +156,7 @@ macro_rules! sha2_module {
             /// This function initialises a new instance of this struct, in the same state as the
             /// current one, so any data written to be hashed in the current struct will also be
             /// used in the digest calculation for the new struct.
-            pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
+            pub fn try_clone(&self) -> Result<Self, AlkaliError> {
                 // We do not use `require_init` here, as it must be called to initialise a
                 // `Multipart` struct.
 
@@ -166,7 +168,7 @@ macro_rules! sha2_module {
                     // place in this struct, and drop can only be called once, so a double-free is
                     // not possible. We never expose a pointer to the allocated memory directly. See
                     // the drop implementation for more reasoning on safety.
-                    let mut state = $crate::mem::malloc()?;
+                    let mut state = mem::malloc()?;
 
                     // SAFETY: We have called `malloc` to allocate sufficient space for one
                     // `crypto_hash_state` struct at each of the two pointers used here:
@@ -212,7 +214,7 @@ macro_rules! sha2_module {
                     )
                 };
 
-                $crate::assert_not_err!(update_result, stringify!($mp_update));
+                assert_not_err!(update_result, stringify!($mp_update));
             }
 
             /// Finalise the hash state, returning the digest.
@@ -236,7 +238,7 @@ macro_rules! sha2_module {
                     // valid for writes of the required length.
                     $mp_final(self.state.as_mut(), digest.as_mut_ptr())
                 };
-                $crate::assert_not_err!(finalise_result, stringify!($mp_final));
+                assert_not_err!(finalise_result, stringify!($mp_final));
 
                 digest
             }
@@ -254,7 +256,7 @@ macro_rules! sha2_module {
             /// This comparison runs in constant time.
             pub fn compare(mut self, digest: &Digest) -> bool {
                 let actual_digest = self.finalise();
-                $crate::util::eq(digest, &actual_digest).unwrap()
+                util::eq(digest, &actual_digest).unwrap()
             }
         }
 
@@ -281,7 +283,7 @@ macro_rules! sha2_module {
                     //     called, and the memory freed.
                     // `self.state` was allocated in the `Multipart` constructor using Sodium's
                     // allocator, so it is correct to free it using Sodium's allocator.
-                    $crate::mem::free(self.state);
+                    mem::free(self.state);
                 }
             }
         }
@@ -290,8 +292,8 @@ macro_rules! sha2_module {
         ///
         /// This function returns the hash of the given message. The same message will always
         /// produce the same hash.
-        pub fn hash(message: &[u8]) -> Result<Digest, $crate::AlkaliError> {
-            $crate::require_init()?;
+        pub fn hash(message: &[u8]) -> Result<Digest, AlkaliError> {
+            require_init()?;
 
             let mut digest = [0u8; DIGEST_LENGTH];
 
@@ -309,7 +311,7 @@ macro_rules! sha2_module {
                     message.len() as libc::c_ulonglong,
                 )
             };
-            $crate::assert_not_err!(hash_result, stringify!($hash));
+            assert_not_err!(hash_result, stringify!($hash));
 
             Ok(digest)
         }

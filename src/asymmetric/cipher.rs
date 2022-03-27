@@ -252,6 +252,9 @@ macro_rules! cipher_module {
         $encrypt_d_afternm:path,    // crypto_box_detached_afternm
         $decrypt_d_afternm:path,    // crypto_box_open_detached_afternm
     ) => {
+        use $crate::asymmetric::cipher::CipherError;
+        use $crate::{assert_not_err, hardened_buffer, random, require_init, AlkaliError};
+
         /// The length of a private key for asymmetric AE, in bytes.
         pub const PRIVATE_KEY_LENGTH: usize = $private_key_len as usize;
 
@@ -279,7 +282,7 @@ macro_rules! cipher_module {
             };
         }
 
-        $crate::hardened_buffer! {
+        hardened_buffer! {
             /// A private key used in asymmetric AE.
             ///
             /// A private key forms one half of a [`Keypair`], together with a [`PublicKey`].
@@ -379,8 +382,8 @@ macro_rules! cipher_module {
             ///
             /// A keypair consists of a [`PrivateKey`], which must be kept secret, and a
             /// [`PublicKey`], which should be made public.
-            pub fn generate() -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn generate() -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut private_key = PrivateKey::new_empty()?;
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
@@ -401,7 +404,7 @@ macro_rules! cipher_module {
                         private_key.inner_mut() as *mut libc::c_uchar,
                     )
                 };
-                $crate::assert_not_err!(keypair_result, stringify!($keypair));
+                assert_not_err!(keypair_result, stringify!($keypair));
 
                 Ok(Self {
                     private_key,
@@ -415,8 +418,8 @@ macro_rules! cipher_module {
             ///
             /// A keypair consists of a [`PrivateKey`], which must be kept secret, and a
             /// [`PublicKey`], which should be made public.
-            pub fn from_seed(seed: &Seed) -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn from_seed(seed: &Seed) -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut private_key = PrivateKey::new_empty()?;
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
@@ -441,7 +444,7 @@ macro_rules! cipher_module {
                         seed.inner() as *const libc::c_uchar,
                     )
                 };
-                $crate::assert_not_err!(keypair_result, stringify!($seed_keypair));
+                assert_not_err!(keypair_result, stringify!($seed_keypair));
 
                 Ok(Self {
                     private_key,
@@ -455,8 +458,8 @@ macro_rules! cipher_module {
             /// the public key associated with the provided private key and stores both in a
             /// [`Keypair`]. This is useful if you know your private key, but don't have the
             /// corresponding public key.
-            pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
 
@@ -479,7 +482,7 @@ macro_rules! cipher_module {
                         private_key.inner() as *const libc::c_uchar,
                     )
                 };
-                $crate::assert_not_err!(scalarmult_result, stringify!($scalarmult_base));
+                assert_not_err!(scalarmult_result, stringify!($scalarmult_base));
 
                 Ok(Self {
                     private_key: private_key.try_clone()?,
@@ -498,11 +501,8 @@ macro_rules! cipher_module {
             ///
             /// The `public_key` argument should be the public key of the party with whom we are to
             /// exchange messages.
-            pub fn session_key(
-                &self,
-                public_key: &PublicKey,
-            ) -> Result<SessionKey, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn session_key(&self, public_key: &PublicKey) -> Result<SessionKey, AlkaliError> {
+                require_init()?;
 
                 let mut session_key = SessionKey::new_empty()?;
 
@@ -529,7 +529,7 @@ macro_rules! cipher_module {
                 if kx_result == 0 {
                     Ok(session_key)
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::PublicKeyUnacceptable.into())
+                    Err(CipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -562,15 +562,15 @@ macro_rules! cipher_module {
                 receiver: &PublicKey,
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<usize, $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<usize, AlkaliError> {
+                require_init()?;
 
                 let c_len = message.len() + MAC_LENGTH;
 
                 if output.len() < c_len {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err($crate::asymmetric::cipher::CipherError::MessageTooLong.into());
+                    return Err(CipherError::MessageTooLong.into());
                 }
 
                 let encrypt_result = unsafe {
@@ -607,7 +607,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok(c_len)
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::PublicKeyUnacceptable.into())
+                    Err(CipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -632,17 +632,17 @@ macro_rules! cipher_module {
                 sender: &PublicKey,
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<usize, $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<usize, AlkaliError> {
+                require_init()?;
 
                 if ciphertext.len() < MAC_LENGTH {
-                    return Err($crate::asymmetric::cipher::CipherError::DecryptionFailed.into());
+                    return Err(CipherError::DecryptionFailed.into());
                 }
 
                 let m_len = ciphertext.len() - MAC_LENGTH;
 
                 if output.len() < m_len {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -678,7 +678,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(m_len)
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::DecryptionFailed.into())
+                    Err(CipherError::DecryptionFailed.into())
                 }
             }
 
@@ -713,13 +713,13 @@ macro_rules! cipher_module {
                 receiver: &PublicKey,
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<(usize, MAC), $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<(usize, MAC), AlkaliError> {
+                require_init()?;
 
                 if output.len() < message.len() {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err($crate::asymmetric::cipher::CipherError::MessageTooLong.into());
+                    return Err(CipherError::MessageTooLong.into());
                 }
 
                 let mut mac = [0u8; MAC_LENGTH];
@@ -760,7 +760,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok((message.len(), mac))
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::PublicKeyUnacceptable.into())
+                    Err(CipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -788,11 +788,11 @@ macro_rules! cipher_module {
                 sender: &PublicKey,
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<usize, $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<usize, AlkaliError> {
+                require_init()?;
 
                 if output.len() < ciphertext.len() {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -831,7 +831,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(ciphertext.len())
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::DecryptionFailed.into())
+                    Err(CipherError::DecryptionFailed.into())
                 }
             }
         }
@@ -864,15 +864,15 @@ macro_rules! cipher_module {
                 message: &[u8],
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<usize, $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<usize, AlkaliError> {
+                require_init()?;
 
                 let c_len = message.len() + MAC_LENGTH;
 
                 if output.len() < c_len {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err($crate::asymmetric::cipher::CipherError::MessageTooLong.into());
+                    return Err(CipherError::MessageTooLong.into());
                 }
 
                 let encrypt_result = unsafe {
@@ -905,7 +905,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok(c_len)
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::PublicKeyUnacceptable.into())
+                    Err(CipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -928,17 +928,17 @@ macro_rules! cipher_module {
                 ciphertext: &[u8],
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<usize, $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<usize, AlkaliError> {
+                require_init()?;
 
                 if ciphertext.len() < MAC_LENGTH {
-                    return Err($crate::asymmetric::cipher::CipherError::DecryptionFailed.into());
+                    return Err(CipherError::DecryptionFailed.into());
                 }
 
                 let m_len = ciphertext.len() - MAC_LENGTH;
 
                 if output.len() < m_len {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -971,7 +971,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(m_len)
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::DecryptionFailed.into())
+                    Err(CipherError::DecryptionFailed.into())
                 }
             }
 
@@ -1004,13 +1004,13 @@ macro_rules! cipher_module {
                 message: &[u8],
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<(usize, MAC), $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<(usize, MAC), AlkaliError> {
+                require_init()?;
 
                 if output.len() < message.len() {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err($crate::asymmetric::cipher::CipherError::MessageTooLong.into());
+                    return Err(CipherError::MessageTooLong.into());
                 }
 
                 let mut mac = [0u8; MAC_LENGTH];
@@ -1047,7 +1047,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok((message.len(), mac))
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::PublicKeyUnacceptable.into())
+                    Err(CipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -1073,11 +1073,11 @@ macro_rules! cipher_module {
                 mac: &MAC,
                 nonce: &Nonce,
                 output: &mut [u8],
-            ) -> Result<usize, $crate::AlkaliError> {
-                $crate::require_init()?;
+            ) -> Result<usize, AlkaliError> {
+                require_init()?;
 
                 if output.len() < ciphertext.len() {
-                    return Err($crate::asymmetric::cipher::CipherError::OutputInsufficient.into());
+                    return Err(CipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -1112,7 +1112,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(ciphertext.len())
                 } else {
-                    Err($crate::asymmetric::cipher::CipherError::DecryptionFailed.into())
+                    Err(CipherError::DecryptionFailed.into())
                 }
             }
         }
@@ -1126,9 +1126,9 @@ macro_rules! cipher_module {
         ///
         /// Returns a nonce generated using a Cryptographically Secure Pseudo-Random Number
         /// Generator, or a [`crate::AlkaliError`] if an error occurred.
-        pub fn generate_nonce() -> Result<Nonce, $crate::AlkaliError> {
+        pub fn generate_nonce() -> Result<Nonce, AlkaliError> {
             let mut nonce = [0; NONCE_LENGTH];
-            $crate::random::fill_random(&mut nonce)?;
+            random::fill_random(&mut nonce)?;
             Ok(nonce)
         }
     };

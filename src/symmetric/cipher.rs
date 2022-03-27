@@ -162,6 +162,9 @@ macro_rules! cipher_module {
         $encrypt_d:path,    // crypto_secretbox_detached
         $decrypt_d:path,    // crypto_secretbox_open_detached
     ) => {
+        use $crate::symmetric::cipher::CipherError;
+        use $crate::{assert_not_err, hardened_buffer, random, require_init, AlkaliError};
+
         /// The length of a symmetric key used for encryption/decryption, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
 
@@ -180,7 +183,7 @@ macro_rules! cipher_module {
             };
         }
 
-        $crate::hardened_buffer! {
+        hardened_buffer! {
             /// A secret key for symmetric authenticated encryption.
             ///
             /// There are no *technical* constraints on the contents of a key, but it should be
@@ -201,8 +204,8 @@ macro_rules! cipher_module {
 
         impl Key {
             /// Generate a new, random key for use in symmetric AE.
-            pub fn generate() -> Result<Self, $crate::AlkaliError> {
-                $crate::require_init()?;
+            pub fn generate() -> Result<Self, AlkaliError> {
+                require_init()?;
 
                 let mut key = Self::new_empty()?;
                 unsafe {
@@ -239,9 +242,9 @@ macro_rules! cipher_module {
         ///
         /// Returns a nonce generated using a Cryptographically Secure Pseudo-Random Number
         /// Generator, or a [`crate::AlkaliError`] if an error occurred.
-        pub fn generate_nonce() -> Result<Nonce, $crate::AlkaliError> {
+        pub fn generate_nonce() -> Result<Nonce, AlkaliError> {
             let mut nonce = [0; NONCE_LENGTH];
-            $crate::random::fill_random(&mut nonce)?;
+            random::fill_random(&mut nonce)?;
             Ok(nonce)
         }
 
@@ -272,15 +275,15 @@ macro_rules! cipher_module {
             key: &Key,
             nonce: &Nonce,
             output: &mut [u8],
-        ) -> Result<usize, $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<usize, AlkaliError> {
+            require_init()?;
 
             let c_len = message.len() + MAC_LENGTH;
 
             if output.len() < c_len {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
+                return Err(CipherError::OutputInsufficient.into());
             } else if message.len() > *MESSAGE_LENGTH_MAX {
-                return Err($crate::symmetric::cipher::CipherError::MessageTooLong.into());
+                return Err(CipherError::MessageTooLong.into());
             }
 
             let encrypt_result = unsafe {
@@ -308,7 +311,7 @@ macro_rules! cipher_module {
                     key.inner() as *const libc::c_uchar,
                 )
             };
-            $crate::assert_not_err!(encrypt_result, stringify!($encrypt));
+            assert_not_err!(encrypt_result, stringify!($encrypt));
 
             Ok(c_len)
         }
@@ -332,17 +335,17 @@ macro_rules! cipher_module {
             key: &Key,
             nonce: &Nonce,
             output: &mut [u8],
-        ) -> Result<usize, $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<usize, AlkaliError> {
+            require_init()?;
 
             if ciphertext.len() < MAC_LENGTH {
-                return Err($crate::symmetric::cipher::CipherError::DecryptionFailed.into());
+                return Err(CipherError::DecryptionFailed.into());
             }
 
             let m_len = ciphertext.len() - MAC_LENGTH;
 
             if output.len() < m_len {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
+                return Err(CipherError::OutputInsufficient.into());
             }
 
             let decrypt_result = unsafe {
@@ -374,7 +377,7 @@ macro_rules! cipher_module {
             if decrypt_result == 0 {
                 Ok(m_len)
             } else {
-                Err($crate::symmetric::cipher::CipherError::DecryptionFailed.into())
+                Err(CipherError::DecryptionFailed.into())
             }
         }
 
@@ -411,13 +414,13 @@ macro_rules! cipher_module {
             key: &Key,
             nonce: &Nonce,
             output: &mut [u8],
-        ) -> Result<(usize, MAC), $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<(usize, MAC), AlkaliError> {
+            require_init()?;
 
             if output.len() < message.len() {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
+                return Err(CipherError::OutputInsufficient.into());
             } else if message.len() > *MESSAGE_LENGTH_MAX {
-                return Err($crate::symmetric::cipher::CipherError::MessageTooLong.into());
+                return Err(CipherError::MessageTooLong.into());
             }
 
             let mut mac = [0u8; MAC_LENGTH];
@@ -449,7 +452,7 @@ macro_rules! cipher_module {
                     key.inner() as *const libc::c_uchar,
                 )
             };
-            $crate::assert_not_err!(encrypt_result, stringify!($encrypt_d));
+            assert_not_err!(encrypt_result, stringify!($encrypt_d));
 
             Ok((message.len(), mac))
         }
@@ -477,11 +480,11 @@ macro_rules! cipher_module {
             key: &Key,
             nonce: &Nonce,
             output: &mut [u8],
-        ) -> Result<usize, $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<usize, AlkaliError> {
+            require_init()?;
 
             if output.len() < ciphertext.len() {
-                return Err($crate::symmetric::cipher::CipherError::OutputInsufficient.into());
+                return Err(CipherError::OutputInsufficient.into());
             }
 
             let decrypt_result = unsafe {
@@ -515,7 +518,7 @@ macro_rules! cipher_module {
             if decrypt_result == 0 {
                 Ok(ciphertext.len())
             } else {
-                Err($crate::symmetric::cipher::CipherError::DecryptionFailed.into())
+                Err(CipherError::DecryptionFailed.into())
             }
         }
     };
