@@ -276,7 +276,7 @@ pub mod blake2b {
         ) -> Result<Self, AlkaliError> {
             require_init()?;
 
-            if output_len < DIGEST_LENGTH_MIN || output_len > DIGEST_LENGTH_MAX {
+            if !(DIGEST_LENGTH_MIN..=DIGEST_LENGTH_MAX).contains(&output_len) {
                 return Err(GenericHashError::DigestLengthInvalid.into());
             }
 

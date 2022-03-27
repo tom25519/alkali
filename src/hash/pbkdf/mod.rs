@@ -7,91 +7,100 @@
 //! collision resistance. Password hashing is different: A normal user's password is actually not
 //! hashed very often (typically only on login), so a very slow hash algorithm doesn't have a major
 //! impact on them. However, for an attacker trying to brute force a password given its hash, the
-//! slowdown caused by a slow algorithm has a major impact. Therefore, password-based key derivation
-//! algorithms, such as those in this module, are intentionally computationally-intensive.
+//! slowdown caused by a slow algorithm can be a major detriment. Therefore, password-based key
+//! derivation algorithms, such as those in this module, are intentionally
+//! computationally-intensive, so that in the case where a user's password hash is leaked, the
+//! attacker has to spend significantly more time trying to break the hash than a fast hash.
 //!
-//! Password-based key derivation is used for password storage, in which we store a hash of a
-//! password rather than the password itself. When a user wishes to login, we compare the hash of
-//! the password they provide with the hash we have stored. The [Wikipedia article on hash
+//! Password-based key derivation is used for user authentication systems, in which we store a hash
+//! of the user's password. When they wish to login, we compare the hash of the password they
+//! provide with the hash we have stored. The [Wikipedia article on hash
 //! functions](https://en.wikipedia.org/wiki/Cryptographic_hash_function#Password_verification)
-//! elaborates on this procedure. The [`hash_str`]/[`verify_str`] API is intended for this use. It
-//! is also used for key derivation, in which a key is deterministically derived from a low-entropy
-//! source (i.e: a password). This key can then be used for other cryptographic applications. The
-//! [`derive_key`] API is intended for this use.
+//! elaborates on this procedure. The [`store_password`]/[`verify_password`] API is intended for
+//! this use.
+//!
+//! Password-based key derivation is (unsurprisingly) also used for key derivation, in which a key
+//! suitable for cryptographic use is deterministically derived from a low-entropy source (i.e: a
+//! password). This key can then be used for other cryptographic applications, for example, to
+//! encrypt a file. The [`derive_key`] API is intended for this use.
 //!
 //! # Algorithm Details
-//! The term for this cryptographic primitive is a [password-based key derivation
-//! function](https://en.wikipedia.org/wiki/Key_derivation_function). The default algorithm is
-//! [Argon2id](argon2id). Argon2id strikes a balance between resisting GPU-based attacks, and
-//! resisting side-channel attacks. [Argon2i](argon2i), which is just intended to be highly
-//! resistant to side-channel attacks, and may be less resistant to GPU-based attacks, is also
-//! available. [Scrypt](scrypt), an older (and perhaps more widely analysed) algorithm, is also
-//! available. Unless you have a specific use-case which requires the use of Argon2i or Scrypt, the
+//! The term for this cryptographic primitive is a [Password-Based Key Derivation
+//! Function](https://en.wikipedia.org/wiki/Key_derivation_function) (PBKDF). The default algorithm
+//! is [Argon2id](https://en.wikipedia.org/wiki/Argon2). Argon2id strikes a balance between
+//! resisting GPU-based attacks, and resisting side-channel attacks. This construction is exposed as
+//! [`argon2id`]. [Argon2i](argon2i), which is just intended to be highly resistant to side-channel
+//! attacks, and may be less resistant to GPU-based attacks, is also available.
+//! [Scrypt](https://www.tarsnap.com/scrypt.html), an older algorithm, is also available as
+//! [`scrypt`]. Unless you have a specific use-case which requires the use of Argon2i or Scrypt, the
 //! default algorithm is probably the best choice.
 //!
 //! # Choosing Memory and Operations Limits
-//! Unlike the other operations exposed by Sodium, the algorithms provided in module are
+//! Unlike the other constructions exposed by Sodium, the algorithms provided in module are
 //! configurable, using the operations and memory limit parameters. Suitable values for these
 //! parameters will vary based on application and hardware, but getting them right is important, as
-//! they determine the cost of the hash, which corresponds to its brute-force resistance.
+//! they determine the cost of the hash, which corresponds to its brute-force resistance. Too high
+//! and the key derivation will be unacceptably slow, too low and brute-force attacks will be
+//! feasible.
 //!
 //! The [Sodium
 //! docs](https://doc.libsodium.org/password_hashing/default_phf#guidelines-for-choosing-the-parameters)
 //! provide guidelines for choosing the parameters, copied here:
 //!
 //! ## Argon2
-//! The memory limit directly specifies how much memory the password hash operation will use. Set
-//! this to the amount of memory you wish to use for password hashing, in bytes.
+//! The memory limit corresponds to how much memory the password hash operation will use. Set this
+//! to the amount of memory you wish to use for password hashing, in bytes.
 //!
 //! The operations limit corresponds to the maximum number of operations to perform, and a higher
 //! value increases the number of CPU cycles required to compute a hash. Begin by setting this to
 //! `3`.
 //!
-//! If the hash takes too long for your application, reduce the memory limit, keeping the
-//! operations limit set to `3`.
+//! If the hash takes too long for your application, reduce the memory limit, keeping the operations
+//! limit set to `3`.
 //!
 //! If the hash is very fast, and you can therefore afford to be more computationally intensive,
 //! increase the operations limit until the computation time is no longer acceptable.
 //!
-//! For online use (website logins), a 1 second computation is likely the acceptable maximum. For
-//! interactive desktop applications, a 5 second computation is acceptable if the password is only
-//! entered once. For more infrequent use (e.g: restoring encrypted backups), even slower
+//! For online use (e.g: website logins), a 1 second computation is likely the acceptable maximum.
+//! For interactive desktop applications, a 5 second computation is acceptable if the password is
+//! only entered once. For more infrequent use (e.g: restoring encrypted backups), even slower
 //! computations can be reasonable.
 //!
 //! Some baseline values for these parameters are provided for each of the algorithms in this
 //! module:
 //! * [`OPS_LIMIT_INTERACTIVE`] and [`MEM_LIMIT_INTERACTIVE`]: For interactive, online operations
-//! (requires 64 MiB memory)
+//!   (requires 64 MiB memory)
 //! * [`OPS_LIMIT_MODERATE`] and [`MEM_LIMIT_MODERATE`]: More conservative values for online
-//! operations (requires 256 MiB memory)
+//!   operations (requires 256 MiB memory)
 //! * [`OPS_LIMIT_SENSITIVE`] and [`MEM_LIMIT_SENSITIVE`]: For offline operations (requires 1 GiB
-//! memory)
+//!   memory)
 //!
 //! ## scrypt
-//! The memory limit directly specifies how much memory the password hash operation will use. Set
-//! this to the amount of memory you wish to use for password hashing, in bytes. This *should be a
-//! power of 2*.
+//! The memory limit corresponds to how much memory the password hash operation will use. Set this
+//! to the amount of memory you wish to use for password hashing, in bytes. This *should be a power
+//! of 2*.
 //!
 //! The operations limit corresponds to the maximum number of operations to perform, and a higher
 //! value increases the number of CPU cycles required to compute a hash. Begin by setting this to
 //! `memlimit / 32`.
 //!
-//! If the hash takes too long for your application, reduce the memory limit, adjusting the
-//! operationgs limit to the new value of `memlimit / 32` in kind.
+//! If the hash takes too long for your application, reduce the memory limit, and reduce the
+//! operations limit to the new value of `memlimit / 32`.
 //!
 //! If the hash is very fast, and you can therefore afford to be more computationally intensive,
 //! increase the operations limit until the computation time is no longer acceptable.
 //!
-//! For online use (website logins), a 1 second computation is likely the acceptable maximum. For
-//! interactive desktop applications, a 5 second computation is acceptable if the password is only
-//! entered once. For more infrequent use (e.g: restoring encrypted backups), even slower
+//! For online use (e.g: website logins), a 1 second computation is likely the acceptable maximum.
+//! For interactive desktop applications, a 5 second computation is acceptable if the password is
+//! only entered once. For more infrequent use (e.g: restoring encrypted backups), even slower
 //! computations can be reasonable.
 //!
 //! Some baseline values for these parameters are provided for each of the algorithms in this
 //! module:
 //! * [`scrypt::OPS_LIMIT_INTERACTIVE`] and [`scrypt::MEM_LIMIT_INTERACTIVE`]: For interactive,
-//! online operations
+//!   online operations (requires 16 MiB memory)
 //! * [`scrypt::OPS_LIMIT_SENSITIVE`] and [`scrypt::MEM_LIMIT_SENSITIVE`]: For offline operations
+//!   (requires 1 GiB memory)
 //!
 //! # Security Considerations
 //! It is important to set the operations limit and memory limit to suitable values for your
@@ -100,33 +109,36 @@
 //! Passwords should ideally be immediately erased from memory when they are no longer required for
 //! hash calculation/key derivation. You can use the [zeroize](https://crates.io/crates/zeroize)
 //! crate to do this very simply, or use the [hard](https://crates.io/crates/hard) crate if you
-//! want to make use of the other memory hardening utilties from Sodium.
+//! want to make use of the other memory hardening utilties from Sodium. <!-- TODO: Update when the
+//! mem module has been cleaned up -->
 //!
 //! A common, but dangerous, mistake is to verify the correctness of a password by generating the
 //! hash again yourself, and naively comparing the newly calculated hash with the stored hash. This
 //! opens the door to [timing attacks](https://en.wikipedia.org/wiki/Timing_attack). The
-//! [`hash_str`]/[`verify_str`] API is designed to prevent this: [`verify_str`] uses a
-//! constant-time comparison, and is safe to use to verify passwords against a password hash
-//! generated with [`hash_str`].
+//! [`store_password]/[`verify_password`] API is designed to prevent this: [`verify_password`] uses
+//! a constant-time comparison, and is safe to use to verify passwords against a password hash
+//! generated with [`store_password`].
 //!
 //! # Examples
-//! This example demonstrates an example user authentication flow using [`hash_str`] and
-//! [`verify_str`]: When a user account is created, we hash the provided password with [`hash_str`],
-//! and store this in the database alongside the username. When the user wishes to log in, we
-//! retrieve the hash from the database, and verify the password is correct using [`verify_str`].
-//! Some example `store_details_in_db` and `retrieve_passwd_hash_from_db` functions are used here,
-//! obviously in a real-world application, there would be considerably more boilerplate.
+//! This example demonstrates an example user authentication flow using [`store_password`] and
+//! [`verify_password`]: When a user account is created, we hash the provided password with
+//! [`store_password`], and store this in the database alongside the username. When the user wishes
+//! to log in, we retrieve the hash from the database, and verify the password is correct using
+//! [`verify_password`]. Some example `store_details_in_db` and `retrieve_passwd_hash_from_db`
+//! functions are used here; in a real-world application there would be considerably more
+//! boilerplate.
 //!
 //! ```rust
 //! use alkali::hash::pbkdf::{
-//!     hash_str, verify_str, PasswordHashError, OPS_LIMIT_INTERACTIVE, MEM_LIMIT_INTERACTIVE,
+//!     store_password, verify_password, PasswordHashError, OPS_LIMIT_INTERACTIVE,
+//!     MEM_LIMIT_INTERACTIVE,
 //! };
 //! use alkali::AlkaliError;
 //! # fn store_details_in_db(_username: &str, _passwd_hash: &str) {}
 //!
 //! /// Creates a new user account with the specified username and password
 //! fn create_user_account(username: &str, passwd: &str) {
-//!     let hash = hash_str(passwd, OPS_LIMIT_INTERACTIVE, MEM_LIMIT_INTERACTIVE).unwrap();
+//!     let hash = store_password(passwd, OPS_LIMIT_INTERACTIVE, MEM_LIMIT_INTERACTIVE).unwrap();
 //!
 //!     store_details_in_db(username, &hash);
 //! }
@@ -139,7 +151,7 @@
 //! fn log_in(username: &str, passwd: &str) -> bool {
 //!     let hash = retrieve_passwd_hash_from_db(username);
 //!
-//!     match verify_str(passwd, hash) {
+//!     match verify_password(passwd, hash) {
 //!         Ok(_) => true,
 //!         Err(AlkaliError::PasswordHashError(PasswordHashError::PasswordIncorrect)) => false,
 //!         Err(_) => panic!("some other error occurred"),
@@ -159,13 +171,17 @@
 //! let passwd = b"some data from which a key will be derived";
 //! let mut key = [0u8; 32];
 //!
+//! // Generate a random salt to use for the key derivation: We will need to store this to be able
+//! // to derive the same key later on.
 //! let salt = generate_salt().unwrap();
+//! // Derive a key from `passwd`, which will be stored in `key`.
 //! derive_key(passwd, &salt, OPS_LIMIT_INTERACTIVE, MEM_LIMIT_INTERACTIVE, &mut key).unwrap();
 //!
-//! // Do something cool with key
-//! // Be sure to store the salt, operations limit, and memory limit alongside the key if it will
-//! // need to be derived again!
+//! // `key` can now be used with other cryptographic operations
 //! ```
+//!
+//! A longer example involving file encryption is available in
+//! [`examples/file_encryption.rs`](https://github.com/tom25519/alkali/blob/main/examples/file-encryption.rs).
 
 use thiserror::Error;
 
@@ -203,8 +219,7 @@ pub enum PasswordHashError {
 
     /// The password hash failed.
     ///
-    /// This is likely due to memory allocation failing, as the pbkdf API is one of the few
-    /// portions of Sodium which requires dynamic memory allocation.
+    /// This may indicate there is insufficient memory available for the memory limit you specified.
     #[error("password hash failed")]
     PasswordHashFailed,
 
@@ -212,7 +227,7 @@ pub enum PasswordHashError {
     ///
     /// This indicates that the password was incorrect for this hash, or potentially that
     /// calculating the hash failed, although this is unlikely in comparison to the former
-    /// possibility.
+    /// possibility. In any case, the user should not be allowed to log in.
     #[error("the password was incorrect for this hash")]
     PasswordIncorrect,
 }
@@ -229,7 +244,7 @@ pub enum RehashResult {
     /// You may wish to compute a new hash the next time the user logs in.
     ParametersDiffer,
 
-    /// The hash is not in the correct format.
+    /// The hash is not in the correct format for this algorithm.
     ///
     /// You may wish to compute a new hash the next time the user logs in.
     InvalidHash,
@@ -256,6 +271,9 @@ macro_rules! pbkdf_module_common {
         $pwhash_verify:path,    // crypto_pwhash_str_verify
         $str_needs_rehash:path, // crypto_pwhash_str_needs_rehash
     ) => {
+        use $crate::hash::pbkdf::{PasswordHashError, RehashResult};
+        use $crate::{random, require_init, unexpected_err, AlkaliError};
+
         /// The minimum value for the operations limit.
         pub const OPS_LIMIT_MIN: usize = $opslim_min as usize;
 
@@ -287,11 +305,11 @@ macro_rules! pbkdf_module_common {
             };
         }
 
-        /// The minimum length for a password to hash.
+        /// The minimum length for a password to hash, in bytes.
         pub const PASSWORD_LENGTH_MIN: usize = $pwlen_min as usize;
 
         lazy_static::lazy_static! {
-            /// The maximum length for a password to hash.
+            /// The maximum length for a password to hash, in bytes.
             pub static ref PASSWORD_LENGTH_MAX: usize = unsafe {
                 // SAFETY: This function just returns a constant value, and should always be safe
                 // to call.
@@ -299,11 +317,11 @@ macro_rules! pbkdf_module_common {
             };
         }
 
-        /// The minimum output size for this algorithm.
+        /// The minimum output size for this algorithm, in bytes.
         pub const OUTPUT_LENGTH_MIN: usize = $outlen_min as usize;
 
         lazy_static::lazy_static! {
-            /// The maximum output size for this algorithm.
+            /// The maximum output size for this algorithm, in bytes.
             pub static ref OUTPUT_LENGTH_MAX: usize = unsafe {
                 // SAFETY: This function just returns a constant value, and should always be safe
                 // to call.
@@ -311,39 +329,47 @@ macro_rules! pbkdf_module_common {
             };
         }
 
-        /// The length of a salt.
+        /// The length of a salt, in bytes.
         pub const SALT_LENGTH: usize = $salt_len as usize;
 
-        /// The maximum length of the string representation of a password hash.
+        /// The maximum length of the string representation of a password hash, in bytes.
+        ///
+        /// This corresponds to the maximum output length of the `store_password` function.
         pub const STR_LENGTH_MAX: usize = $str_len as usize - 1;
 
-        /// A salt for a password hash, used to introduce non-determinism into the algorithm.
+        /// A salt for a password hash, used to introduce non-determinism into the key derivation.
         pub type Salt = [u8; SALT_LENGTH];
 
         /// Generate a random salt for use with [`derive_key`].
-        pub fn generate_salt() -> Result<Salt, $crate::AlkaliError> {
+        pub fn generate_salt() -> Result<Salt, AlkaliError> {
             let mut salt = [0u8; SALT_LENGTH];
-            $crate::random::fill_random(&mut salt)?;
+            random::fill_random(&mut salt)?;
             Ok(salt)
         }
 
-        /// Hash a password, for later use to verify a provided password is the same as the
-        /// original.
+        /// Hash a password, for storage and later identity verification.
         ///
         /// This function is used when a user's password must be stored, so that we can later
-        /// verify their identity. A hash of the password is calculated using this function. We can
-        /// later verify a password provided by the user against this hash using the [`verify_str`]
-        /// function. So the actual password never needs to be stored.
+        /// verify their identity by verifying they know this password. A hash of the password is
+        /// calculated using this function. We can later verify a password provided by the user
+        /// is correct for this hash using the [`verify_password`] function, so the actual plaintext
+        /// password is never permanently stored.
         ///
         /// The first argument to this function is the password from which the hash will be
-        /// calculated. The second and third arguments are the operations and memory limits, which
-        /// determine the computational complexity of the hash. These values should be chosen
-        /// specifically for your application, see [Choosing Memory and Operations
+        /// calculated. Passwords should be at least [`PASSWORD_LENGTH_MIN`] and at most
+        /// [`PASSWORD_LENGTH_MAX`](struct@PASSWORD_LENGTH_MAX) bytes.
+        ///
+        /// The second and third arguments are the operations and memory limits, which determine the
+        /// computational complexity of the hash. These values should be chosen specifically for
+        /// your application, see [Choosing Memory and Operations
         /// Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
-        /// If hashing is successful, a String will be returned containing the hash and the
-        /// parameters used to calculate it (including a randomly-generated salt). This hash can
-        /// later be used with [`verify_str`] to verify the password.
+        /// If hashing is successful, a `String` will be returned. This entire string should be
+        /// stored, and can later be used with [`verify_password`] to verify the password. The
+        /// string encodes the operations and memory limits, as well as a randomly chosen salt,
+        /// alongside the hash itself. This string will only contain printable ASCII characters
+        /// which can be safely inserted into (e.g:) a database, and will be at most
+        /// [`STR_LENGTH_MAX`] bytes long.
         ///
         /// # Security Concerns
         /// It is important to set the operations limit and memory limit to suitable values for your
@@ -353,31 +379,41 @@ macro_rules! pbkdf_module_common {
         /// This function is not suitable for deriving keys for use with other cryptographic
         /// operations, and large parts of its output are predictable. You should instead use
         /// [`derive_key`], which only produces output suitable for use as key-data.
-        pub fn hash_str(
+        pub fn store_password(
             password: &str,
             ops_limit: usize,
             mem_limit: usize,
-        ) -> Result<String, $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<String, AlkaliError> {
+            require_init()?;
 
+            // This buffer will store the encoded password hash. We add an extra byte to account for
+            // the null terminator which Sodium will append to the password.
             let mut out = [0u8; STR_LENGTH_MAX + 1];
 
-            if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
-            } else if ops_limit < OPS_LIMIT_MIN || ops_limit > OPS_LIMIT_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::OpsLimitInvalid.into());
-            } else if mem_limit < MEM_LIMIT_MIN || mem_limit > *MEM_LIMIT_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::MemLimitInvalid.into());
+            if !(PASSWORD_LENGTH_MIN..=*PASSWORD_LENGTH_MAX).contains(&password.as_bytes().len()) {
+                return Err(PasswordHashError::PasswordLengthInvalid.into());
+            } else if !(OPS_LIMIT_MIN..=OPS_LIMIT_MAX).contains(&ops_limit) {
+                return Err(PasswordHashError::OpsLimitInvalid.into());
+            } else if !(MEM_LIMIT_MIN..=*MEM_LIMIT_MAX).contains(&mem_limit) {
+                return Err(PasswordHashError::MemLimitInvalid.into());
             }
 
             let pwhash_result = unsafe {
-                // SAFETY: The first argument to this function is a pointer to which a C-formatted
-                // string will be written. This must have enough space to store `STRBYTES` bytes,
-                // which we have defined `out` to be. When we use `out`, we will treat it as a
-                // C-formatted string. The next two arguments are a pointer to a password to hash,
-                // and the length of the password in bytes. We use `password.as_bytes().len()` to
-                // specify the length, so it is correct for this pointer. The final two parameters
-                // are the operations limit and memory limit, which are both just integers.
+                // SAFETY: The first argument to this function is the destination to which the
+                // calculated hash string will be written. The string may be up to
+                // `crypto_pwhash_STRBYTES` (including null terminator). We have defined the `out`
+                // array to be `crypto_pwhash_STRBYTES` bytes long, so it is valid for writes of the
+                // required length. We cast the `*mut u8` pointer to a `*mut c_char`, which is safe
+                // as the two types have the same representation. The next two arguments specify the
+                // password to hash and its length. The password need not be null terminated. We use
+                // `password.as_bytes().len()` to specify the length of the password, so
+                // `password.as_bytes()` is definitely valid for reads of this length. Again, we
+                // cast the `*mut u8` pointer to a `*mut c_char`, which is safe. We verify above
+                // that the password length is between `crypto_pwhash_PASSWDMIN` and
+                // `crypto_pwhash_PASSWDMAX`, the valid range for a password for this function. The
+                // final two arguments specify the operations and memory limits, which are just
+                // integers. We verify above that they fall within the acceptable range for use
+                // here.
                 $pwhash_str(
                     out.as_mut_ptr() as *mut libc::c_char,
                     password.as_bytes().as_ptr() as *const libc::c_char,
@@ -388,16 +424,19 @@ macro_rules! pbkdf_module_common {
             };
 
             if pwhash_result == 0 {
-                // We need to take a slice up to & including the first nul byte here, to
+                // We need to take a slice up to but not including the first null byte here, to
                 // successfully construct a CString.
                 let hash_len = unsafe {
                     // SAFETY: This is a binding to the strnlen function from the C standard
                     // library. This function takes a pointer to a C-formatted string (with null
-                    // byte) as an argument, and returns the (inclusive) length to the nul byte, up
-                    // to a provided maximum number of bytes.  The $pwhash_str function above was
-                    // used to fill the contents of this buffer, which Sodium guarantees with
-                    // produce a valid C string, including null byte.  Therefore, it is safe to use
-                    // strnlen to determine the length of the string, including the null byte.
+                    // byte) as an argument, and returns the (inclusive) length to the null byte, up
+                    // to a provided maximum number of bytes. The $pwhash_str function above was
+                    // used to fill the contents of this buffer, which Sodium guarantees will
+                    // produce a valid C string, including null byte, if the return value of the
+                    // function indicates success. Therefore, it is safe to use strnlen to determine
+                    // the length of the string, including the null byte. We use `out.len()` to
+                    // specify the maximum number of bytes which can be read from `out`, as a sanity
+                    // check.
                     libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
                 };
                 let output_string = std::ffi::CString::new(&out[..hash_len])
@@ -406,46 +445,41 @@ macro_rules! pbkdf_module_common {
                     .unwrap();
                 Ok(output_string)
             } else {
-                Err($crate::hash::pbkdf::PasswordHashError::PasswordHashFailed.into())
+                Err(PasswordHashError::PasswordHashFailed.into())
             }
         }
 
         /// Verify `password` matches the provided `hash`.
         ///
         /// The first argument to this function is the password to verify. The second argument is
-        /// the hash against whiich the password will be checked, previously calculated using
-        /// [`hash_str`].
+        /// the hash against which the password should be compared, previously calculated using
+        /// [`store_password`].
         ///
         /// This function will return `Ok(())` if `password` is equal to the password used to
-        /// calculated `hash`, or a [`PasswordHashError`](super::PasswordHashError) otherwise.
-        pub fn verify_str(password: &str, hash: &str) -> Result<(), $crate::AlkaliError> {
-            $crate::require_init()?;
+        /// calculate `hash`, or a [`PasswordHashError`](super::PasswordHashError) otherwise.
+        pub fn verify_password(password: &str, hash: &str) -> Result<(), AlkaliError> {
+            require_init()?;
 
             let hash = std::ffi::CString::new(hash).unwrap();
-            let hash_ptr = hash.into_raw();
 
             let verification_result = unsafe {
-                // SAFETY: The first argument to this function is a C-formatted string containing
-                // the hash against which the password should be verified. We construct the
-                // hash_ptr argument by building a CString from a valid Rust string, then calling
-                // `into_raw`. The definition of CString in the Rust standard library says that
-                // this produces a valid pointer to a C-formatted string. The second and third
-                // arguments specify a pointer to a password to verify, and the length of the
-                // password. We use `password.as_bytes()` to convert the password to bytes, and
-                // use `password.as_bytes().len()` to calculate the length, so this is correct for
-                // this pointer.
+                // SAFETY: The first argument to this function should be a pointer to the hash
+                // against which the password should be compared, encoded as a C-style string with
+                // a null byte at the end. We construct `hash` using `CString::new`, and use
+                // `CString::as_bytes_with_nul` to get a slice of the bytes in the string, including
+                // the null byte, so this argument will point to a correctly-encoded string, and
+                // this is safe. The next two arguments specify a pointer to the password to verify
+                // and its length. As we specify the length with the second argument, the password
+                // need not be null terminated. We use `password.as_bytes().len()` to specify the
+                // length of the password, so `password.as_bytes()` is valid for reads of this
+                // length. For the first and second arguments, we cast `*const u8` pointers to
+                // `*const c_char` pointers, which is safe, as the two types have the same
+                // representation.
                 $pwhash_verify(
-                    hash_ptr,
+                    hash.as_bytes_with_nul().as_ptr() as *const libc::c_char,
                     password.as_bytes().as_ptr() as *const libc::c_char,
                     password.as_bytes().len() as libc::c_ulonglong,
                 )
-            };
-
-            // Make sure we free the hash string's memory
-            let _hash = unsafe {
-                // SAFETY: This pointer was created using CString::into_raw, so it is safe to
-                // create a CString from it.
-                std::ffi::CString::from_raw(hash_ptr)
             };
 
             if verification_result == 0 {
@@ -457,49 +491,48 @@ macro_rules! pbkdf_module_common {
 
         /// Determine if `hash` is a valid hash string under the given parameters.
         ///
-        /// This function is intended to be used if you update the parameters for the hash function
-        /// used to store passwords. As users log in, if the password hash needs updating (as
-        /// determined using this function), then the hash can be recalculated.
+        /// This function is intended to be used if you update the operations/memory for the hash
+        /// function used to store passwords. As users log in, if the password hash needs updating
+        /// (as determined using this function), then the hash can be recalculated.
         ///
         /// Returns [`RehashResult::ParametersMatch`](super::RehashResult::ParametersMatch) if the
         /// hash appears to be in the correct format for a hash with the given paramaters. Returns
         /// [`RehashResult::ParametersDiffer`](super::RehashResult::ParametersDiffer) if the hash
         /// is in the correct format for this algorithm, but has different parameters. Returns
         /// [`RehashResult::InvalidHash`](super::RehashResult::InvalidHash) if the hash doesn't
-        /// appear to be in the correct format for this algorithm.
+        /// appear to be in the correct format for this algorithm. In the latter two cases, after
+        /// verifying the hash with the older limits/algorithm, you should store a new hash using
+        /// the current operations/memory limits with this algorithm.
         pub fn requires_rehash(
             hash: &str,
             ops_limit: usize,
             mem_limit: usize,
-        ) -> Result<$crate::hash::pbkdf::RehashResult, $crate::AlkaliError> {
-            use $crate::hash::pbkdf::RehashResult;
-
-            $crate::require_init()?;
+        ) -> Result<RehashResult, AlkaliError> {
+            require_init()?;
 
             let hash = std::ffi::CString::new(hash).unwrap();
-            let hash_ptr = hash.into_raw();
 
             let rehash_result = unsafe {
-                // SAFETY: The first argument to this function is a C-formatted string containing
-                // the hash to check. We define the hash_ptr argument by building a CString from a
-                // valid Rust string, then calling `into_raw`. The definition of CString in the Rust
-                // standard library says that this produces a valid pointer to a C-formatted string.
-                // The remaining two arguments, the operations and memory limits, are just integers.
-                $str_needs_rehash(hash_ptr, ops_limit as libc::c_ulonglong, mem_limit)
-            };
-
-            // Make sure we free the hash string's memory
-            let _hash = unsafe {
-                // SAFETY: This pointer was created using CString::into_raw, so it is safe to
-                // create a CString from it.
-                std::ffi::CString::from_raw(hash_ptr)
+                // SAFETY: The first argument to this function should be a pointer to the hash
+                // to test for rehashing, encoded as a C-style string with a null byte at the end.
+                // We construct `hash` using `CString::new`, and use `CString::as_bytes_with_nul` to
+                // get a slice of the bytes in the string, including the null byte, so this argument
+                // will point to a correctly-encoded string, and this is safe. We cast the `*const
+                // u8` pointer to a `*const c_char` pointer, which is valid as `u8` and `c_char`
+                // have the same representation. The next two arguments specify the operations and
+                // memory limits, which are just integers.
+                $str_needs_rehash(
+                    hash.as_bytes_with_nul().as_ptr() as *const libc::c_char,
+                    ops_limit as libc::c_ulonglong,
+                    mem_limit,
+                )
             };
 
             match rehash_result {
                 -1 => Ok(RehashResult::InvalidHash),
                 0 => Ok(RehashResult::ParametersMatch),
                 1 => Ok(RehashResult::ParametersDiffer),
-                _ => unreachable!(),
+                _ => unexpected_err!(stringify!($str_needs_rehash)),
             }
         }
     };
@@ -563,29 +596,33 @@ macro_rules! pbkdf_module {
         /// Derive a key from a low-entropy input (i.e: a password).
         ///
         /// This function is used when a key, suitable for use with cryptographic algorithms which
-        /// use a fixed-size input, must be derived deterministically from a variable-size,
-        /// typically low-entropy source (like a password).
+        /// use a fixed-size key, must be derived deterministically from a variable-size, typically
+        /// low-entropy source (like a password).
         ///
         /// The first argument to this function is the password from which the key is to be
-        /// derived. The second argument is a [`Salt`] to use in the hash calculation, which
-        /// introduces some non-determinism into the process (the same password will not produce the
-        /// same key, unless the same salt is used). This should be generated randomly when the key
-        /// is first derived using [`generate_salt`]. The third and fourth arguments are the
-        /// operations and memory limits, which determine the computational complexity of the hash.
-        /// These values should be chosen specifically for your application, see [Choosing Memory
-        /// and Operations Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits). The
-        /// final argument is the buffer to which the derived key will be written. This can be of
-        /// any length between [`OUTPUT_LENGTH_MIN`] and
+        /// derived.
+        ///
+        /// The second argument is a [`Salt`] to use in the hash calculation, which introduces some
+        /// non-determinism into the process (the same password will not produce the same key,
+        /// unless the same salt is used). This should be generated randomly when the key is first
+        /// derived using [`generate_salt`]. The salt will need to be stored, so that the key can be
+        /// derived later on, otherwise it will not be possible to derive the same key from the
+        /// password.
+        ///
+        /// The third and fourth arguments are the operations and memory limits, which determine the
+        /// computational complexity of the hash. These values should be chosen specifically for
+        /// your application, see [Choosing Memory and Operations
+        /// Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits). The same operations &
+        /// memory limits will be needed to derive the same key later on, so you may wish to store
+        /// them alongside the salt.
+        ///
+        /// The final argument is the buffer to which the derived key will be written. This can be
+        /// of any length between [`OUTPUT_LENGTH_MIN`] and
         /// [`OUTPUT_LENGTH_MAX`](struct@OUTPUT_LENGTH_MAX) bytes.
         ///
         /// If key derivation is successful, the `key` buffer is filled with derived key data. If
         /// the derivation fails, a [`PasswordHashError`](super::PasswordHashError) will be
         /// returned.
-        ///
-        /// Key derivation is a deterministic operation dependent on the password, salt, operations
-        /// limit, and memory limit. These values are **not** stored in the derived key, so they
-        /// will need to be stored alongside it. When the same key is derived in the future, these
-        /// same parameters must be used. None are secret.
         ///
         /// # Security Concerns
         /// It is important to set the operations limit and memory limit to suitable values for your
@@ -593,40 +630,52 @@ macro_rules! pbkdf_module {
         /// subject](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
         /// To store a password to verify a user's identity, it's a better idea to use
-        /// [`hash_str`], which includes the hash parameters in the generated string, and produces
-        /// ASCII output which can easily be stored in any database. The [`verify_str`] function is
-        /// also provided to verify a password matches a specific hash.
+        /// [`store_password`], which includes the hash parameters in the generated string, and
+        /// produces ASCII output which can easily be stored in any database. The
+        /// [`verify_password`] function is also provided to verify a password matches a specific
+        /// hash in [constant time](https://en.wikipedia.org/wiki/Timing_attack).
+        ///
+        /// <!-- TODO: Add section on securing memory where keys are stored w/ mem module when
+        /// cleaned up -->
         pub fn derive_key(
             password: &[u8],
             salt: &Salt,
             ops_limit: usize,
             mem_limit: usize,
             key: &mut [u8],
-        ) -> Result<(), $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<(), AlkaliError> {
+            require_init()?;
 
-            if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
-            } else if ops_limit < OPS_LIMIT_MIN || ops_limit > OPS_LIMIT_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::OpsLimitInvalid.into());
-            } else if mem_limit < MEM_LIMIT_MIN || mem_limit > *MEM_LIMIT_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::MemLimitInvalid.into());
-            } else if key.len() < OUTPUT_LENGTH_MIN || key.len() > *OUTPUT_LENGTH_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::OutputLengthInvalid.into());
+            if !(PASSWORD_LENGTH_MIN..=*PASSWORD_LENGTH_MAX).contains(&password.len()) {
+                return Err(PasswordHashError::PasswordLengthInvalid.into());
+            } else if !(OPS_LIMIT_MIN..=OPS_LIMIT_MAX).contains(&ops_limit) {
+                return Err(PasswordHashError::OpsLimitInvalid.into());
+            } else if !(MEM_LIMIT_MIN..=*MEM_LIMIT_MAX).contains(&mem_limit) {
+                return Err(PasswordHashError::MemLimitInvalid.into());
+            } else if !(OUTPUT_LENGTH_MIN..=*OUTPUT_LENGTH_MAX).contains(&key.len()) {
+                return Err(PasswordHashError::OutputLengthInvalid.into());
             }
 
             let pwhash_result = unsafe {
-                // SAFETY: This function takes 8 parameters. The first two specify a pointer to
-                // which a key will be written, and the length of data to write to this pointer. We
-                // use `key.len()` to specify the length of the data, which is equal to the length
-                // of the buffer. The `key` type itself is a slice of `u8`s, so any data can be
-                // written to it safely. The next two arguments are a pointer to a password, and
-                // its length. We use `password.len()` to specify the length of the password, so
-                // this is the correct length for the pointer. The next argument is a pointer to a
-                // salt. We have defined the `Salt` type to be `SALTBYTES` bytes long, the expected
-                // length of a salt for this function, so this is valid to use here. The next three
-                // parameters are the operations limit, memory limit, and algorithm identifier,
-                // which are all just integers. Therefore this function call is safe.
+                // SAFETY: The first two arguments to this function specify the destination to which
+                // the derived key should be written, and the desired length of the key. We verify
+                // above that the desired length is within the acceptable range of key lengths. We
+                // use `key.len()` to specify the number of bytes to write to `key`, so `key` is
+                // definitely valid for writes of this length. The next two arguments specify the
+                // password from which the key should be derived and its length. We use
+                // `password.len()` to specify the length of the password, so `password` is
+                // definitely valid for reads of this length. We cast the `*const u8` pointer to a
+                // `*const c_char` pointer to pass to the C function, which is safe because `u8` and
+                // `c_char` have the same representation. We verify above the password length is
+                // within the acceptable range. The next argument should be a pointer to the salt to
+                // use in the hash calculation. The `Salt` type is defined to be
+                // `crypto_pwhash_SALTBYTES`, the length of a salt for this algorithm, so `salt` is
+                // valid for reads of the required length. The next two arguments specify the
+                // operations and memory limits, which are just integers. We verify above that they
+                // fall within the acceptable range for use here. The final argument is the
+                // algorithm identifier, which must be either `crypto_pwhash_ALG_ARGON2I13` or
+                // `crypto_pwhash_ALG_ARGON2ID13`. This macro should only be invoked with one of
+                // these two values.
                 $pwhash(
                     key.as_mut_ptr(),
                     key.len() as libc::c_ulonglong,
@@ -642,7 +691,7 @@ macro_rules! pbkdf_module {
             if pwhash_result == 0 {
                 Ok(())
             } else {
-                Err($crate::hash::pbkdf::PasswordHashError::PasswordHashFailed.into())
+                Err(PasswordHashError::PasswordHashFailed.into())
             }
         }
     };
@@ -690,29 +739,33 @@ macro_rules! pbkdf_module {
         /// Derive a key from a low-entropy input (i.e: a password).
         ///
         /// This function is used when a key, suitable for use with cryptographic algorithms which
-        /// use a fixed-size input, must be derived deterministically from a variable-size,
-        /// typically low-entropy source (like a password).
+        /// use a fixed-size key, must be derived deterministically from a variable-size, typically
+        /// low-entropy source (like a password).
         ///
         /// The first argument to this function is the password from which the key is to be
-        /// derived. The second argument is a [`Salt`] to use in the hash calculation, which
-        /// introduces some non-determinism into the process (the same password will not produce the
-        /// same key, unless the same salt is used). This should be generated randomly when the key
-        /// is first derived using [`generate_salt`]. The third and fourth arguments are the
-        /// operations and memory limits, which determine the computational complexity of the hash.
-        /// These values should be chosen specifically for your application, see [Choosing Memory
-        /// and Operations Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits). The
-        /// final argument is the buffer to which the derived key will be written. This can be of
-        /// any length between [`OUTPUT_LENGTH_MIN`] and
+        /// derived.
+        ///
+        /// The second argument is a [`Salt`] to use in the hash calculation, which introduces some
+        /// non-determinism into the process (the same password will not produce the same key,
+        /// unless the same salt is used). This should be generated randomly when the key is first
+        /// derived using [`generate_salt`]. The salt will need to be stored, so that the key can be
+        /// derived later on, otherwise it will not be possible to derive the same key from the
+        /// password.
+        ///
+        /// The third and fourth arguments are the operations and memory limits, which determine the
+        /// computational complexity of the hash. These values should be chosen specifically for
+        /// your application, see [Choosing Memory and Operations
+        /// Limits](crate::hash::pbkdf#choosing-memory-and-operations-limits). The same operations &
+        /// memory limits will be needed to derive the same key later on, so you may wish to store
+        /// them alongside the salt.
+        ///
+        /// The final argument is the buffer to which the derived key will be written. This can be
+        /// of any length between [`OUTPUT_LENGTH_MIN`] and
         /// [`OUTPUT_LENGTH_MAX`](struct@OUTPUT_LENGTH_MAX) bytes.
         ///
         /// If key derivation is successful, the `key` buffer is filled with derived key data. If
         /// the derivation fails, a [`PasswordHashError`](super::PasswordHashError) will be
         /// returned.
-        ///
-        /// Key derivation is a deterministic operation dependent on the password, salt, operations
-        /// limit, and memory limit. These values are **not** stored in the derived key, so they
-        /// will need to be stored alongside it. When the same key is derived in the future, these
-        /// same parameters must be used. None are secret.
         ///
         /// # Security Concerns
         /// It is important to set the operations limit and memory limit to suitable values for your
@@ -720,40 +773,49 @@ macro_rules! pbkdf_module {
         /// subject](crate::hash::pbkdf#choosing-memory-and-operations-limits).
         ///
         /// To store a password to verify a user's identity, it's a better idea to use
-        /// [`hash_str`], which includes the hash parameters in the generated string, and produces
-        /// ASCII output which can easily be stored in any database. The [`verify_str`] function is
-        /// also provided to verify a password matches a specific hash.
+        /// [`store_password`], which includes the hash parameters in the generated string, and
+        /// produces ASCII output which can easily be stored in any database. The
+        /// [`verify_password`] function is also provided to verify a password matches a specific
+        /// hash in [constant time](https://en.wikipedia.org/wiki/Timing_attack).
+        ///
+        /// <!-- TODO: Add section on securing memory where keys are stored w/ mem module when
+        /// cleaned up -->
         pub fn derive_key(
             password: &[u8],
             salt: &Salt,
             ops_limit: usize,
             mem_limit: usize,
             key: &mut [u8],
-        ) -> Result<(), $crate::AlkaliError> {
-            $crate::require_init()?;
+        ) -> Result<(), AlkaliError> {
+            require_init()?;
 
-            if password.len() < PASSWORD_LENGTH_MIN || password.len() > *PASSWORD_LENGTH_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::PasswordLengthInvalid.into());
-            } else if ops_limit < OPS_LIMIT_MIN || ops_limit > OPS_LIMIT_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::OpsLimitInvalid.into());
-            } else if mem_limit < MEM_LIMIT_MIN || mem_limit > *MEM_LIMIT_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::MemLimitInvalid.into());
-            } else if key.len() < OUTPUT_LENGTH_MIN || key.len() > *OUTPUT_LENGTH_MAX {
-                return Err($crate::hash::pbkdf::PasswordHashError::OutputLengthInvalid.into());
+            if !(PASSWORD_LENGTH_MIN..=*PASSWORD_LENGTH_MAX).contains(&password.len()) {
+                return Err(PasswordHashError::PasswordLengthInvalid.into());
+            } else if !(OPS_LIMIT_MIN..=OPS_LIMIT_MAX).contains(&ops_limit) {
+                return Err(PasswordHashError::OpsLimitInvalid.into());
+            } else if !(MEM_LIMIT_MIN..=*MEM_LIMIT_MAX).contains(&mem_limit) {
+                return Err(PasswordHashError::MemLimitInvalid.into());
+            } else if !(OUTPUT_LENGTH_MIN..=*OUTPUT_LENGTH_MAX).contains(&key.len()) {
+                return Err(PasswordHashError::OutputLengthInvalid.into());
             }
 
             let pwhash_result = unsafe {
-                // SAFETY: This function takes 8 parameters. The first two specify a pointer to
-                // which a key will be written, and the length of data to write to this pointer. We
-                // use `key.len()` to specify the length of the data, which is equal to the length
-                // of the buffer. The `key` type itself is a slice of `u8`s, so any data can be
-                // written to it safely. The next two arguments are a pointer to a password, and
-                // its length. We use `password.len()` to specify the length of the password, so
-                // this is the correct length for the pointer. The next argument is a pointer to a
-                // salt. We have defined the `Salt` type to be `SALTBYTES` bytes long, the expected
-                // length of a salt for this function, so this is valid to use here. The next three
-                // parameters are the operations limit, memory limit, and algorithm identifier,
-                // which are all just integers. Therefore this function call is safe.
+                // SAFETY: The first two arguments to this function specify the destination to which
+                // the derived key should be written, and the desired length of the key. We verify
+                // above that the desired length is within the acceptable range of key lengths. We
+                // use `key.len()` to specify the number of bytes to write to `key`, so `key` is
+                // definitely valid for writes of this length. The next two arguments specify the
+                // password from which the key should be derived and its length. We use
+                // `password.len()` to specify the length of the password, so `password` is
+                // definitely valid for reads of this length. We cast the `*const u8` pointer to a
+                // `*const c_char` pointer to pass to the C function, which is safe because `u8` and
+                // `c_char` have the same representation. We verify above the password length is
+                // within the acceptable range. The next argument should be a pointer to the salt to
+                // use in the hash calculation. The `Salt` type is defined to be
+                // `crypto_pwhash_SALTBYTES`, the length of a salt for this algorithm, so `salt` is
+                // valid for reads of the required length. The final two arguments specify the
+                // operations and memory limits, which are just integers. We verify above that they
+                // fall within the acceptable range for use here.
                 $pwhash(
                     key.as_mut_ptr(),
                     key.len() as libc::c_ulonglong,
@@ -768,7 +830,7 @@ macro_rules! pbkdf_module {
             if pwhash_result == 0 {
                 Ok(())
             } else {
-                Err($crate::hash::pbkdf::PasswordHashError::PasswordHashFailed.into())
+                Err(PasswordHashError::PasswordHashFailed.into())
             }
         }
     };
@@ -787,6 +849,7 @@ macro_rules! kdf_tests {
         mem: $memlim:expr,
         out: $key:expr,
     }, )* ) => {
+
         #[test]
         fn key_derivation_test_vectors() -> Result<(), $crate::AlkaliError> {
             $(
@@ -849,45 +912,45 @@ macro_rules! kdf_tests {
 #[allow(unused_imports)]
 pub(crate) use kdf_tests;
 
-/// Generates some tests for the [`verify_str`] function of a `pbkdf` implementation. Takes test
-/// vectors as arguments.
+/// Generates some tests for the [`verify_password`] function of a `pbkdf` implementation. Takes
+/// test vectors as arguments.
 #[allow(unused_macros)]
-macro_rules! verify_str_valid_tests {
+macro_rules! verify_password_valid_tests {
     ( $( {
         pass: $pass:expr,
         hash: $hash:expr,
     }, )* ) => {
         #[test]
-        fn verify_str_valid_strings() {
+        fn verify_password_valid_strings() {
             $(
-                assert!(super::verify_str(&$pass, &$hash).is_ok());
+                assert!(super::verify_password(&$pass, &$hash).is_ok());
             )*
         }
     };
 }
 
 #[allow(unused_imports)]
-pub(crate) use verify_str_valid_tests;
+pub(crate) use verify_password_valid_tests;
 
-/// Generates some tests for the [`verify_str`] function of a `pbkdf` implementation. Takes test
-/// vectors as arguments.
+/// Generates some tests for the [`verify_password`] function of a `pbkdf` implementation. Takes
+/// test vectors as arguments.
 #[allow(unused_macros)]
-macro_rules! verify_str_invalid_tests {
+macro_rules! verify_password_invalid_tests {
     ( $( {
         pass: $pass:expr,
         hash: $hash:expr,
     }, )* ) => {
         #[test]
-        fn verify_str_invalid_strings() {
+        fn verify_password_invalid_strings() {
             $(
-                assert!(super::verify_str(&$pass, &$hash).is_err());
+                assert!(super::verify_password(&$pass, &$hash).is_err());
             )*
         }
     }
 }
 
 #[allow(unused_imports)]
-pub(crate) use verify_str_invalid_tests;
+pub(crate) use verify_password_invalid_tests;
 
 /// Generates tests for the [`requires_rehash`] function of a `pbkdf` implementation.
 #[allow(unused_macros)]
@@ -901,7 +964,7 @@ macro_rules! needs_rehash_tests {
             const MEM_LIMIT: usize = 5000000;
             const PASSWORD: &'static str = "Correct Horse Battery Staple";
 
-            let hash = super::hash_str(PASSWORD, OPS_LIMIT, MEM_LIMIT)?;
+            let hash = super::store_password(PASSWORD, OPS_LIMIT, MEM_LIMIT)?;
 
             assert_eq!(
                 super::requires_rehash(&hash, OPS_LIMIT, MEM_LIMIT)?,

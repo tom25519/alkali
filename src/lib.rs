@@ -114,11 +114,8 @@ pub enum AlkaliError {
     MemoryManagement,
 
     /// Tried to create a hardened buffer from an incorrectly sized slice.
-    ///
-    /// The 0th item is the expected length of a slice from which this buffer can be initialised,
-    /// the 1st item is the actual length of the slice that was provided.
-    #[error("incorrect slice length: expected {0}, found {1}")]
-    IncorrectSliceLength(usize, usize),
+    #[error("incorrect slice length")]
+    IncorrectSliceLength,
 
     /// The slices supplied to [`util::add_le`], [`util::sub_le`], or [`util::compare_le`] differ
     /// in length.
@@ -327,7 +324,7 @@ macro_rules! hardened_buffer {
 
                 fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
                     if buf.len() != $size {
-                        return Err(Self::Error::IncorrectSliceLength($size as usize, buf.len()));
+                        return Err(Self::Error::IncorrectSliceLength);
                     }
 
                     let mut new = Self::new_empty()?;
@@ -475,7 +472,7 @@ macro_rules! unexpected_err {
             "An unexpected error occurred in `{}`. Please report this bug to \
             https://github.com/tom25519/alkali/issues.",
             $source
-        );
+        )
     };
 }
 

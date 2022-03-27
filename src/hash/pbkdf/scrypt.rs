@@ -1,4 +1,4 @@
-//! The [scrypt](https://en.wikipedia.org/wiki/Scrypt) password-based key derivation algorithm.
+//! The [scrypt](https://www.tarsnap.com/scrypt.html) password-based key derivation algorithm.
 //!
 //! Please note that the `scrypt` API is missing the `MEM_LIMIT_MODERATE` and `OPS_LIMIT_MODERATE`
 //! constants included in [`super::argon2id`] and [`super::argon2i`].
@@ -29,7 +29,7 @@ pbkdf_module! {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{kdf_tests, verify_str_invalid_tests, verify_str_valid_tests};
+    use super::super::{kdf_tests, verify_password_invalid_tests, verify_password_valid_tests};
     use crate::AlkaliError;
 
     kdf_tests! {
@@ -321,7 +321,7 @@ mod tests {
         },
     }
 
-    verify_str_valid_tests! [
+    verify_password_valid_tests! [
         {
             pass: "^T5H$JYt39n%K*j:W]!1s?vg!:jGi]Ax?..l7[p0v:1jHTpla9;]bUN;?bWyCbtqg nrDFal+Jxl\
                    3,2`#^tFSu%v_+7iYse8-cCkNf!tD=KrW)",
@@ -380,7 +380,7 @@ mod tests {
         },
     ];
 
-    verify_str_invalid_tests! [
+    verify_password_invalid_tests! [
         {
             pass: "Y0!?iQa9M%5ekffW(`",
             hash: "$7$A6....1....$TrXs5Zk6s8sWHpQgWDIXTR8kUU3s6Jc3s.DtdS8M2i4a4ik5hGDN7foMuHOW.\
@@ -502,7 +502,7 @@ mod tests {
         const MEM_LIMIT: usize = super::MEM_LIMIT_INTERACTIVE;
         const PASSWORD: &'static str = "Correct Horse Battery Staple";
 
-        let hash = super::hash_str(PASSWORD, OPS_LIMIT, MEM_LIMIT)?;
+        let hash = super::store_password(PASSWORD, OPS_LIMIT, MEM_LIMIT)?;
 
         assert_eq!(
             super::requires_rehash(&hash, OPS_LIMIT, MEM_LIMIT)?,

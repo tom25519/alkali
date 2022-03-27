@@ -76,7 +76,7 @@ pub enum RandomError {
 
     /// Tried to call [`random_u32_in_range`] with `low` > `high`.
     #[error("the lower bound for random_u32_in_range must be lower than the upper bound")]
-    InvalidBounds,
+    BoundsInvalid,
 }
 
 /// [rand](https://rust-random.github.io/book)-compatible CSPRNG API.
@@ -128,7 +128,7 @@ pub fn random_u32_in_range(low: u32, high: u32) -> Result<u32, AlkaliError> {
     require_init()?;
 
     if low > high {
-        return Err(RandomError::InvalidBounds.into());
+        return Err(RandomError::BoundsInvalid.into());
     }
 
     let upper_bound = high - low;

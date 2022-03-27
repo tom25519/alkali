@@ -165,8 +165,8 @@ pub enum SignError {
     /// When signing a message in combined mode, the output must be at least the length of the
     /// original message plus [`SIGNATURE_LENGTH`] bytes, to allow for the signature to be
     /// prepended.
-    #[error("the output buffer provided was insufficient: required at least {0} bytes, found {1}")]
-    InsufficientBuffer(usize, usize),
+    #[error("the output buffer provided was insufficient")]
+    OutputInsufficient,
 }
 
 /// The [Ed25519](https://ed25519.cr.yp.to/) signature scheme.
@@ -685,7 +685,7 @@ pub mod ed25519 {
 
         let output_size = message.len() + SIGNATURE_LENGTH;
         if output.len() < output_size {
-            return Err(SignError::InsufficientBuffer(output_size, output.len()).into());
+            return Err(SignError::OutputInsufficient.into());
         }
 
         let sign_result = unsafe {

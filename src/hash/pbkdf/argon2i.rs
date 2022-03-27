@@ -33,7 +33,7 @@ pbkdf_module! {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        kdf_tests, needs_rehash_tests, verify_str_invalid_tests, verify_str_valid_tests,
+        kdf_tests, needs_rehash_tests, verify_password_invalid_tests, verify_password_valid_tests,
     };
 
     kdf_tests! {
@@ -238,7 +238,7 @@ mod tests {
         },
     }
 
-    verify_str_valid_tests! [
+    verify_password_valid_tests! [
         {
             pass: "",
             hash: "$argon2i$v=19$m=4096,t=1,p=1$X1NhbHQAAAAAAAAAAAAAAA$bWh++MKN1OiFHKgIWTLvIi1i\
@@ -261,7 +261,7 @@ mod tests {
         },
     ];
 
-    verify_str_invalid_tests! [
+    verify_password_invalid_tests! [
         {
             pass: "",
             hash: "",
