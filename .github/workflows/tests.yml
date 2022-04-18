@@ -24,13 +24,13 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: windows-latest
             target: x86_64-pc-windows-gnu
-            toolchain: stable-x86_64-pc-windows-gnu
+            toolchain: nightly-x86_64-pc-windows-gnu
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           target: ${{ matrix.target }}
-          toolchain: ${{ matrix.toolchain || 'stable' }}
+          toolchain: ${{ matrix.toolchain || 'nightly' }}
           override: true
       - uses: Swatinem/rust-cache@v1
       - run: ${{ matrix.deps }}
