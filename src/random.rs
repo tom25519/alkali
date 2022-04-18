@@ -42,7 +42,7 @@
 // whether this is beneficial to other crates using this one. We expose a RngCore API anyway, other
 // implementations are very easy to swap in.
 
-use crate::{hardened_buffer, require_init, AlkaliError};
+use crate::{mem, require_init, AlkaliError};
 use libsodium_sys as sodium;
 use rand_core::{impls, CryptoRng, Error as RandError, RngCore};
 use thiserror::Error;
@@ -50,7 +50,7 @@ use thiserror::Error;
 /// The length of a seed for use with [`fill_random_from_seed`].
 pub const SEED_LENGTH: usize = sodium::randombytes_SEEDBYTES as usize;
 
-hardened_buffer! {
+mem::hardened_buffer! {
     /// Represents a seed for deterministic pseudo-random number generation, see
     /// [`fill_random_from_seed`].
     ///
@@ -60,7 +60,7 @@ hardened_buffer! {
     ///
     /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will be
     /// zeroed on drop. A number of other security measures are taken to protect its contents.
-    Seed(SEED_LENGTH)
+    pub Seed(SEED_LENGTH)
 }
 
 /// Error type returned if something went wrong in the random module.

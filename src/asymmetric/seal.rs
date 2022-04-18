@@ -134,7 +134,7 @@ macro_rules! seal_module {
         $decrypt:path,          // crypto_box_seal_open
     ) => {
         use $crate::asymmetric::seal::SealError;
-        use $crate::{assert_not_err, hardened_buffer, require_init, AlkaliError};
+        use $crate::{assert_not_err, mem, require_init, AlkaliError};
 
         /// The length of a private key for asymmetric AE, in bytes.
         pub const PRIVATE_KEY_LENGTH: usize = $private_key_len as usize;
@@ -157,7 +157,7 @@ macro_rules! seal_module {
             };
         }
 
-        hardened_buffer! {
+        mem::hardened_buffer! {
             /// A private key used in asymmetric AE.
             ///
             /// A private key forms one half of a [`Keypair`], together with a [`PublicKey`].
@@ -181,7 +181,7 @@ macro_rules! seal_module {
             /// # Security Considerations
             /// In this API, private keys are stored *unclamped*. If you intend to use this private
             /// key with a different X25519 implementation, it may need to be clamped before use.
-            PrivateKey(PRIVATE_KEY_LENGTH);
+            pub PrivateKey(PRIVATE_KEY_LENGTH);
 
             /// A seed used to deterministically derive a [`Keypair`].
             ///
@@ -198,7 +198,7 @@ macro_rules! seal_module {
             /// `[u8; SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used
             /// like it is an `&[u8]`. This struct uses heap memory while in scope, allocated using
             /// Sodium's [secure memory utilities](https://doc.libsodium.org/memory_management).
-            Seed(KEY_SEED_LENGTH);
+            pub Seed(KEY_SEED_LENGTH);
         }
 
         impl PrivateKey {

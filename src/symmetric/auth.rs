@@ -137,9 +137,7 @@ macro_rules! auth_module {
         $mp_final:path,     // crypto_auth_final
     ) => {
         use $crate::symmetric::auth::AuthError;
-        use $crate::{
-            assert_not_err, hardened_buffer, mem, require_init, unexpected_err, util, AlkaliError,
-        };
+        use $crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
 
         /// The length of a symmetric key for message authentication, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
@@ -150,7 +148,7 @@ macro_rules! auth_module {
         /// length.
         pub const TAG_LENGTH: usize = $tag_len as usize;
 
-        hardened_buffer! {
+        mem::hardened_buffer! {
             /// A secret key for symmetric message authentication.
             ///
             /// There are no *technical* constraints on the contents of a key, but it should be
@@ -165,7 +163,7 @@ macro_rules! auth_module {
             /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is
             /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
             /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-            Key(KEY_LENGTH);
+            pub Key(KEY_LENGTH);
         }
 
         impl Key {
@@ -403,7 +401,7 @@ macro_rules! auth_module {
                 };
                 assert_not_err!(finalise_result, stringify!($mp_final));
 
-                if util::eq(tag, &actual_tag)? {
+                if mem::eq(tag, &actual_tag)? {
                     Ok(())
                 } else {
                     Err(AuthError::AuthenticationFailed.into())

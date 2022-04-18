@@ -142,9 +142,7 @@ pub enum GenericHashError {
 /// The [BLAKE2b](https://www.blake2.net) hash function.
 pub mod blake2b {
     use super::GenericHashError;
-    use crate::{
-        assert_not_err, hardened_buffer, mem, require_init, unexpected_err, util, AlkaliError,
-    };
+    use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
     use libsodium_sys as sodium;
     use std::marker::PhantomData;
     use std::ptr;
@@ -192,7 +190,7 @@ pub mod blake2b {
     /// A key length below [`KEY_LENGTH_MIN`] must not be used if the key is intended to be secret..
     pub const KEY_LENGTH_MAX: usize = sodium::crypto_generichash_blake2b_KEYBYTES_MAX as usize;
 
-    hardened_buffer! {
+    mem::hardened_buffer! {
         /// Secret key for the keyed variant of the hash function.
         ///
         /// Keys can be used to turn this hash function into a
@@ -216,7 +214,7 @@ pub mod blake2b {
         /// KEY_LENGTH_DEFAULT]`, and implements [`std::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory management](https://doc.libsodium.org/memory_management).
-        Key(KEY_LENGTH_DEFAULT);
+        pub Key(KEY_LENGTH_DEFAULT);
     }
 
     impl Key {
@@ -533,7 +531,7 @@ pub mod blake2b {
 
             let mut output = vec![0u8; self.output_len];
             self.finalise(&mut output)?;
-            util::eq(digest, &output)
+            mem::eq(digest, &output)
         }
     }
 

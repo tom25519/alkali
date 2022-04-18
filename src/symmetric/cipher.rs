@@ -163,7 +163,7 @@ macro_rules! cipher_module {
         $decrypt_d:path,    // crypto_secretbox_open_detached
     ) => {
         use $crate::symmetric::cipher::CipherError;
-        use $crate::{assert_not_err, hardened_buffer, random, require_init, AlkaliError};
+        use $crate::{assert_not_err, mem, random, require_init, AlkaliError};
 
         /// The length of a symmetric key used for encryption/decryption, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
@@ -183,7 +183,7 @@ macro_rules! cipher_module {
             };
         }
 
-        hardened_buffer! {
+        mem::hardened_buffer! {
             /// A secret key for symmetric authenticated encryption.
             ///
             /// There are no *technical* constraints on the contents of a key, but it should be
@@ -199,7 +199,7 @@ macro_rules! cipher_module {
             /// used like it is an `&[u8]`. This struct uses heap memory while in scope, allocated
             /// using Sodium's [secure memory
             /// utilities](https://doc.libsodium.org/memory_management).
-            Key(KEY_LENGTH);
+            pub Key(KEY_LENGTH);
         }
 
         impl Key {

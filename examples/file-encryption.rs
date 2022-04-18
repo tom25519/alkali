@@ -97,7 +97,7 @@ where
     }
 
     // Clear the input buffer, which still contains plaintext
-    alkali::util::clear(&mut buf_read).unwrap();
+    alkali::mem::clear(&mut buf_read).unwrap();
 }
 
 /// Decrypts `source`, writing the result to `dest`, using `password` to derive the decryption key.
@@ -153,7 +153,7 @@ where
     }
 
     // Clear the output buffer, which still contains plaintext
-    alkali::util::clear(&mut buf_write).unwrap();
+    alkali::mem::clear(&mut buf_write).unwrap();
 }
 
 fn main() {
@@ -176,5 +176,5 @@ fn main() {
     }
 
     // Clear the password from memory
-    alkali::util::clear(&mut password).unwrap();
+    alkali::mem::clear(&mut password).unwrap();
 }

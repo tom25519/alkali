@@ -81,7 +81,7 @@ macro_rules! sha2_module {
         $mp_update:path,    // crypto_hash_update
         $mp_final:path,     // crypto_hash_final
     ) => {
-        use $crate::{assert_not_err, mem, require_init, unexpected_err, util, AlkaliError};
+        use $crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
 
         /// The length of the output of this hash function, in bytes.
         pub const DIGEST_LENGTH: usize = $digest_len as usize;
@@ -256,7 +256,7 @@ macro_rules! sha2_module {
             /// This comparison runs in constant time.
             pub fn compare(mut self, digest: &Digest) -> bool {
                 let actual_digest = self.finalise();
-                util::eq(digest, &actual_digest).unwrap()
+                mem::eq(digest, &actual_digest).unwrap()
             }
         }
 

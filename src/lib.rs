@@ -79,6 +79,8 @@
 //! ```
 
 #![cfg_attr(doc_cfg, feature(doc_cfg))]
+#![cfg_attr(feature = "alloc", feature(allocator_api))]
+#![cfg_attr(feature = "alloc", feature(nonnull_slice_from_raw_parts))]
 
 use libsodium_sys as sodium;
 use thiserror::Error;
@@ -86,7 +88,7 @@ use thiserror::Error;
 pub mod asymmetric;
 pub mod encode;
 pub mod hash;
-mod mem;
+pub mod mem;
 pub mod random;
 pub mod symmetric;
 pub mod util;
@@ -193,275 +195,6 @@ pub enum AlkaliError {
     OneTimeAuthError(#[from] symmetric::one_time_auth::OneTimeAuthError),
 }
 
-/// Creates a hardened buffer type, for storing sensitive data (keys, passwords, etc).
-macro_rules! hardened_buffer {
-    ( $( $(#[$metadata:meta])* $name:ident($size:expr)$(;)? )* ) => {
-        $(
-            $(#[$metadata])*
-            pub struct $name {
-                ptr: std::ptr::NonNull<[u8; $size]>,
-                _marker: std::marker::PhantomData<[u8; $size]>,
-            }
-
-            impl $name {
-                pub const LENGTH: usize = $size as usize;
-
-                /// Create a new instance of this type, filled with all zeroes.
-                pub fn new_empty() -> Result<Self, $crate::AlkaliError> {
-                    $crate::require_init()?;
-
-                    let ptr = unsafe {
-                        // SAFETY: This call to malloc() will allocate the memory required for a
-                        // [u8; $size] type, outside of Rust's memory management. The associated
-                        // memory is always freed in the corresponding `drop` call. We never free
-                        // the memory in any other place in this struct, and drop can only be
-                        // called once, so a double-free is not possible. We never give out a
-                        // pointer to the allocated memory directly, only references. The region of
-                        // memory allocated will always be a valid representation of a [u8; $size].
-                        // The alignment for a u8 is just 1 byte, so we don't need to worry about
-                        // alignment issues. See the drop implementation for more reasoning on
-                        // safety.
-                        let ptr = $crate::mem::malloc()?;
-
-                        // SAFETY: This call to memzero will clear the memory pointed to by `ptr`.
-                        // The `memzero::<T>` function clears an amount of memory equal to the size
-                        // of the `T`. Since the `malloc` call above succeeded, `ptr` points to
-                        // sufficient memory to store a `[u8; $size]`, so `memzero::<[u8; $size]>`
-                        // is valid here. Any memory value can be a valid representation of this
-                        // type, so zeroing the memory is valid.
-                        $crate::mem::memzero(ptr)?;
-
-                        ptr
-                    };
-
-                    Ok(Self {
-                        ptr,
-                        _marker: std::marker::PhantomData,
-                    })
-                }
-
-                /// Safely zero the contents of the buffer, in such a way that the compiler will
-                /// not optimise away the operation.
-                ///
-                /// This is automatically done when the buffer is dropped, but you may wish to do
-                /// this as soon as the buffer is no longer required.
-                pub fn zero(&mut self) -> Result<(), $crate::AlkaliError> {
-                    $crate::require_init()?;
-
-                    unsafe {
-                        // SAFETY: While this struct is in scope, the memory backing it is
-                        // allocated and writeable, so we can safely write zeros to it. All zeroes
-                        // is a valid representation of a u8 array.
-                        $crate::mem::memzero(self.ptr)
-                    }
-                }
-
-                /// Create a new instance of the same type, copying the contents of this buffer.
-                ///
-                /// This operation may fail, as Sodium's allocator is more likely to encounter
-                /// issues than the standard system allocator.
-                pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
-                    let mut new_buf = Self::new_empty()?;
-                    new_buf.copy_from_slice(self.as_ref());
-                    Ok(new_buf)
-                }
-
-                /// Returns a raw constant pointer to the memory backing this type.
-                ///
-                /// # Safety
-                /// This function is only used internally. This struct assumes that the memory will
-                /// remain valid until it is dropped, so anywhere this method is used, the memory
-                /// must not be freed. Furthermore, the memory is only valid for the lifetime of
-                /// this struct, so after it is dropped, this pointer must not be used again.
-                #[allow(dead_code)]
-                unsafe fn inner(&self) -> *const [u8; $size] {
-                    self.ptr.as_ptr()
-                }
-
-                /// Returns a raw mutable pointer to the memory backing this type.
-                ///
-                /// # Safety
-                /// This function is only used internally. This struct assumes that the memory will
-                /// remain valid until it is dropped, so anywhere this method is used, the memory
-                /// must not be freed. Furthermore, the memory is only valid for the lifetime of
-                /// this struct, so after it is dropped, this pointer must not be used again.
-                #[allow(dead_code)]
-                unsafe fn inner_mut(&mut self) -> *mut [u8; $size] {
-                    self.ptr.as_mut()
-                }
-            }
-
-            impl Drop for $name {
-                fn drop(&mut self) {
-                    unsafe {
-                        // SAFETY:
-                        // * Is a double-free possible in safe code?
-                        //   * No: We only free in `drop`, which cannot be called manually, and
-                        //     is called exactly once when the struct is actually dropped. Once
-                        //     the value is dropped, there's no way to call the method again to
-                        //     cause a double free. In the `try_clone` method, new memory is
-                        //     allocated.
-                        // * Is a use-after-free possible in safe code?
-                        //   * No: We only ever free a buffer on drop, and after drop, none of the
-                        //     type's methods are accessible.
-                        // * Is a memory leak possible in safe code?
-                        //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`,
-                        //     or `std::mem::forget`, the destructor will not be called even though
-                        //     the buffer is dropped. However, it is documented that in these cases
-                        //     heap memory may be leaked, so this is expected behaviour. In
-                        //     addition, certain signal interrupts or using panic=abort behaviour
-                        //     will mean the destructor is not called. There's little we can do
-                        //     about this, but a failure to free is probably reasonable in such
-                        //     cases. In any other case, `drop` will be called, and the memory
-                        //     freed.
-                        $crate::mem::free(self.ptr);
-                    }
-                }
-            }
-
-            impl TryFrom<&[u8]> for $name {
-                type Error = $crate::AlkaliError;
-
-                fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
-                    if buf.len() != $size {
-                        return Err(Self::Error::IncorrectSliceLength);
-                    }
-
-                    let mut new = Self::new_empty()?;
-                    new.copy_from_slice(buf);
-                    Ok(new)
-                }
-            }
-
-            impl TryFrom<&[u8; $size]> for $name {
-                type Error = $crate::AlkaliError;
-
-                fn try_from(buf: &[u8; $size]) -> Result<Self, Self::Error> {
-                    let mut new = Self::new_empty()?;
-                    new.copy_from_slice(buf);
-                    Ok(new)
-                }
-            }
-
-            impl std::convert::AsMut<[u8; $size]> for $name {
-                fn as_mut(&mut self) -> &mut [u8; $size] {
-                    unsafe {
-                        // SAFETY: The memory backing this buffer is valid for the lifetime of the
-                        // struct. Implicitly, since we don't specify a lifetime for the reference
-                        // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
-                        // memory of length $size is a valid representation of a [u8; $size], so
-                        // initialisation & alignment issues are not a concern.
-                        self.ptr.as_mut()
-                    }
-                }
-            }
-
-            impl std::convert::AsRef<[u8; $size]> for $name {
-                fn as_ref(&self) -> &[u8; $size] {
-                    unsafe {
-                        // SAFETY: The memory backing this buffer is valid for the lifetime of the
-                        // struct. Implicitly, since we don't specify a lifetime for the reference
-                        // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
-                        // memory of length $size is a valid representation of a [u8; $size], so
-                        // initialisation & alignment issues are not a concern.
-                        self.ptr.as_ref()
-                    }
-                }
-            }
-
-            impl std::borrow::Borrow<[u8; $size]> for $name {
-                fn borrow(&self) -> &[u8; $size] {
-                    unsafe {
-                        // SAFETY: The memory backing this buffer is valid for the lifetime of the
-                        // struct. Implicitly, since we don't specify a lifetime for the reference
-                        // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
-                        // memory of length $size is a valid representation of a [u8; $size], so
-                        // initialisation & alignment issues are not a concern.
-                        self.ptr.as_ref()
-                    }
-                }
-            }
-
-            impl std::borrow::BorrowMut<[u8; $size]> for $name {
-                fn borrow_mut(&mut self) -> &mut [u8; $size] {
-                    unsafe {
-                        // SAFETY: The memory backing this buffer is valid for the lifetime of the
-                        // struct. Implicitly, since we don't specify a lifetime for the reference
-                        // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
-                        // memory of length $size is a valid representation of a [u8; $size], so
-                        // initialisation & alignment issues are not a concern.
-                        self.ptr.as_mut()
-                    }
-                }
-            }
-
-            impl std::fmt::Debug for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    f.write_str(&format!("{}([u8; {}])", stringify!($name), $size))
-                }
-            }
-
-            impl std::ops::Deref for $name {
-                type Target = [u8; $size];
-
-                fn deref(&self) -> &Self::Target {
-                    unsafe {
-                        // SAFETY: The memory backing this buffer is valid for the lifetime of the
-                        // struct. Implicitly, since we don't specify a lifetime for the reference
-                        // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
-                        // memory of length $size is a valid representation of a [u8; $size], so
-                        // initialisation & alignment issues are not a concern.
-                        self.ptr.as_ref()
-                    }
-                }
-            }
-
-            impl std::ops::DerefMut for $name {
-                fn deref_mut(&mut self) -> &mut Self::Target {
-                    unsafe {
-                        // SAFETY: The memory backing this buffer is valid for the lifetime of the
-                        // struct. Implicitly, since we don't specify a lifetime for the reference
-                        // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
-                        // memory of length $size is a valid representation of a [u8; $size], so
-                        // initialisation & alignment issues are not a concern.
-                        self.ptr.as_mut()
-                    }
-                }
-            }
-
-            impl std::cmp::PartialEq<Self> for $name {
-                fn eq(&self, other: &Self) -> bool {
-                    unsafe {
-                        // SAFETY: To initialise a struct of this type, we must successfully
-                        // allocate the backing data, otherwise initialisation will fail.
-                        // Therefore, we know the backing data for other is not NULL, so it is safe
-                        // to initialise the NonNull without checking for NULL.
-                        let other = std::ptr::NonNull::new_unchecked(other.inner() as *mut _);
-
-                        // SAFETY: Both self.0 and other are pointers to regions of memory of the
-                        // same length, and are of sufficient size to store a [u8; $size].
-                        $crate::mem::memcmp(self.ptr, other).unwrap()
-                    }
-                }
-            }
-
-            impl std::fmt::Pointer for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-                    <std::ptr::NonNull<[u8; $size]> as std::fmt::Pointer>::fmt(&self.ptr, f)
-                }
-            }
-        )*
-    };
-}
-
-pub(crate) use hardened_buffer;
-
 /// Used where Sodium returns an error which we didn't expect.
 ///
 /// This indicates the implementation has changed, and is now fallible where it previously always
@@ -500,7 +233,8 @@ pub(crate) use assert_not_err;
 /// internally. Returns `Ok(0)` if Sodium was initialised successfully, `Ok(1)` if Sodium has
 /// already been initialised, or [`AlkaliError::SodiumInitFailed`] if the initialisation was
 /// unsuccessful.
-fn require_init() -> Result<libc::c_int, crate::AlkaliError> {
+#[doc(hidden)]
+pub fn require_init() -> Result<libc::c_int, crate::AlkaliError> {
     let init_status = unsafe {
         // SAFETY: This function can safely be called multiple times from multiple threads. Once it
         // has been called, all other Sodium functions are also thread-safe.
@@ -524,6 +258,4 @@ mod tests {
     fn can_initialise() -> Result<(), AlkaliError> {
         require_init().map(|_| ())
     }
-
-    // TODO: Test hardened_buffer!
 }

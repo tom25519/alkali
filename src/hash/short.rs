@@ -59,14 +59,14 @@ macro_rules! short_module {
         $key_len:expr,      // crypto_shorthash_KEYBYTES
         $shorthash:path,    // crypto_shorthash
     ) => {
-        use $crate::{assert_not_err, hardened_buffer, random, require_init, AlkaliError};
+        use $crate::{assert_not_err, mem, random, require_init, AlkaliError};
         /// The length of a key for this hash function, in bytes.
         pub const KEY_LENGTH: usize = $key_len as usize;
 
         /// The output size of this hash function, in bytes.
         pub const DIGEST_LENGTH: usize = $digest_len as usize;
 
-        hardened_buffer! {
+        mem::hardened_buffer! {
             /// Secret key used to secure the hash function.
             ///
             /// There are no *technical* constraints on the contents of a key, but it should be
@@ -81,7 +81,7 @@ macro_rules! short_module {
             /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
             /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
             /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-            Key(KEY_LENGTH);
+            pub Key(KEY_LENGTH);
         }
 
         impl Key {

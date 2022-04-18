@@ -140,7 +140,7 @@ pub enum CipherStreamError {
 
 pub mod xchacha20poly1305 {
     use super::CipherStreamError;
-    use crate::{assert_not_err, hardened_buffer, mem, require_init, unexpected_err, AlkaliError};
+    use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
     use libsodium_sys as sodium;
     use std::marker::PhantomData;
     use std::ptr;
@@ -198,7 +198,7 @@ pub mod xchacha20poly1305 {
         };
     }
 
-    hardened_buffer! {
+    mem::hardened_buffer! {
         /// Secret key for symmetric authenticated encryption/decryption of a stream of messages.
         ///
         /// There are no *technical* constraints on the contents of a key, but it should be
@@ -213,7 +213,7 @@ pub mod xchacha20poly1305 {
         /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is an
         /// `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's [secure
         /// memory utilities](https://doc.libsodium.org/memory_management).
-        Key(KEY_LENGTH);
+        pub Key(KEY_LENGTH);
     }
 
     impl Key {

@@ -3,72 +3,6 @@
 use crate::{require_init, AlkaliError};
 use libsodium_sys as sodium;
 
-/// Constant time test for equality of two slices.
-///
-/// This function tests whether two byte slices contain the same contents. For the same input size,
-/// the time taken to compare the slices is always identical. Returns true if the slices contain
-/// the same contents, false otherwise. Always returns false if the slices are not of the same
-/// length.
-pub fn eq(a: &[u8], b: &[u8]) -> Result<bool, AlkaliError> {
-    require_init()?;
-
-    if a.len() != b.len() {
-        return Ok(false);
-    }
-
-    let comparison_result = unsafe {
-        // SAFETY: This function expects two pointers to regions of memory of the same length,
-        // specified by the third parameter. We check above to ensure that a and b are of the same
-        // length. We use a.len() to specify the length, so it is correct for these slices. This
-        // function will not modify the contents of either slice.
-        sodium::sodium_memcmp(
-            a.as_ptr() as *const libc::c_void,
-            b.as_ptr() as *const libc::c_void,
-            a.len(),
-        )
-    };
-
-    Ok(comparison_result == 0)
-}
-
-/// Zero the contents of `buf`.
-///
-/// After sensitive data is no longer required, it should be cleared from memory. However, since
-/// memory is often not accessed after being cleared, compilers may remove the operation to erase
-/// the memory as part of the optimisation process. This function zeroes the memory in such a way
-/// that the compiler will not remove the operation.
-pub fn clear(buf: &mut [u8]) -> Result<(), AlkaliError> {
-    require_init()?;
-
-    unsafe {
-        // SAFETY: This function expects a pointer to a region of memory, and a number of bytes to
-        // clear starting at that pointer. We pass a pointer to `buf`, and specify `buf.len()`
-        // bytes should be cleared. Since `buf` is a slice of `u8`s, it points to `buf.len()`
-        // bytes, so the amount of memory to clear here is correct. All zeroes is a valid
-        // representation of a u8 slice.
-        sodium::sodium_memzero(buf.as_mut_ptr() as *mut libc::c_void, buf.len());
-    };
-
-    Ok(())
-}
-
-/// Test whether `buf` is filled entirely with zeroes, in constant-time for a specific length.
-///
-/// Returns true if `buf` is filled with all-zeroes, false otherwise. This function will always
-/// take the same number of operations to perform the check for a specific length of `buf`.
-pub fn is_zero(buf: &[u8]) -> Result<bool, AlkaliError> {
-    require_init()?;
-
-    let comparison_result = unsafe {
-        // SAFETY: This function expects a pointer to a region of memory, and a number of bytes to
-        // test for being zero. We use `buf.len()` as the number of bytes to check, which is the
-        // size of `buf` in bytes, so this is correct for this pointer.
-        sodium::sodium_is_zero(buf.as_ptr(), buf.len())
-    };
-
-    Ok(comparison_result != 0)
-}
-
 /// Treat `number` as a little-endian, unsigned integer, and increment its value by 1.
 ///
 /// Increments `number` in-place.
@@ -261,63 +195,8 @@ pub fn unpad(buf: &[u8], blocksize: usize) -> Result<&[u8], AlkaliError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_le, clear, compare_le, eq, increment_le, is_zero, pad, sub_le, unpad};
-    use crate::{random, AlkaliError};
-
-    #[test]
-    fn eq_tests() -> Result<(), AlkaliError> {
-        let mut buf_a = [0; 1000];
-        let mut buf_b = [0; 1000];
-
-        random::fill_random(&mut buf_a)?;
-        buf_b.copy_from_slice(&buf_a);
-
-        assert!(eq(&buf_a, &buf_b)?);
-
-        for i in 0..1000 {
-            assert!(eq(&buf_a[..i], &buf_b[..i])?);
-        }
-
-        assert!(!eq(&buf_a[..500], &buf_b[..501])?);
-
-        buf_b[..500].copy_from_slice(&[0; 500]);
-
-        assert!(!eq(&buf_a, &buf_b)?);
-        assert!(!eq(&buf_a[..500], &buf_b[..500])?);
-        assert!(eq(&buf_a[500..], &buf_b[500..])?);
-
-        buf_a[..500].copy_from_slice(&[0; 500]);
-
-        assert!(eq(&buf_a, &buf_b)?);
-
-        Ok(())
-    }
-
-    #[test]
-    fn clear_tests() -> Result<(), AlkaliError> {
-        for _ in 0..1000 {
-            let mut buf = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-            random::fill_random(&mut buf)?;
-            clear(&mut buf)?;
-            assert_eq!(&buf, &vec![0; buf.len()]);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn is_zero_tests() -> Result<(), AlkaliError> {
-        for _ in 0..1000 {
-            let mut buf = vec![0; random::random_u32_in_range(100, 1000)? as usize];
-            assert!(is_zero(&buf)?);
-            random::fill_random(&mut buf)?;
-            assert!(!is_zero(&buf)?);
-            clear(&mut buf)?;
-            assert!(is_zero(&buf)?);
-        }
-
-        Ok(())
-    }
+    use super::{add_le, compare_le, increment_le, pad, sub_le, unpad};
+    use crate::{mem, random, AlkaliError};
 
     #[test]
     fn increment_le_vectors() -> Result<(), AlkaliError> {
@@ -453,12 +332,12 @@ mod tests {
             add_le(&mut buf1, &buf2)?;
             sub_le(&mut buf1, &buf2)?;
 
-            assert!(!is_zero(&buf1)?);
+            assert!(!mem::is_zero(&buf1)?);
 
             buf2.copy_from_slice(&buf1);
             sub_le(&mut buf1, &buf2)?;
 
-            assert!(is_zero(&buf1)?);
+            assert!(mem::is_zero(&buf1)?);
         }
 
         let mut buf_add = [0; 1000];
@@ -470,7 +349,7 @@ mod tests {
         sub_le(&mut buf_add, &buf1)?;
         sub_le(&mut buf_add, &buf2)?;
 
-        assert!(is_zero(&buf_add)?);
+        assert!(mem::is_zero(&buf_add)?);
 
         Ok(())
     }

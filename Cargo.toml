@@ -14,17 +14,18 @@ all-features = true
 rustdoc-args = ["--cfg", "doc_cfg"]
 
 [dependencies]
-lazy_static = "1.4.0"
-libc = { version = "0.2.119", default-features = false }
-libsodium-sys-stable = "1.19.21"
-rand_core = { version = "0.6.3", features = ["std"] }
-thiserror = "1.0.30"
+lazy_static = "1.4"
+libc = { version = "0.2", default-features = false }
+libsodium-sys-stable = "1.19"
+rand_core = { version = "0.6", features = ["std"] }
+thiserror = "1.0"
 
 [dev-dependencies]
-rand = "0.8.5"
-rpassword = "5.0.1"
+rand = "0.8"
+rpassword = "5.0"
 
 [features]
+alloc = []
 hazmat = ["onetimeauth", "sha2"]
 onetimeauth = []
 sha2 = []

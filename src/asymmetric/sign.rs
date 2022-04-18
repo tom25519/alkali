@@ -172,7 +172,7 @@ pub enum SignError {
 /// The [Ed25519](https://ed25519.cr.yp.to/) signature scheme.
 pub mod ed25519 {
     use super::SignError;
-    use crate::{assert_not_err, hardened_buffer, mem, require_init, unexpected_err, AlkaliError};
+    use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
     use libsodium_sys as sodium;
     use std::marker::PhantomData;
     use std::ptr;
@@ -193,7 +193,7 @@ pub mod ed25519 {
     /// The length of a seed to use for the deterministic generation of a [`Keypair`].
     pub const KEYPAIR_SEED_LENGTH: usize = sodium::crypto_sign_ed25519_SEEDBYTES as usize;
 
-    hardened_buffer! {
+    mem::hardened_buffer! {
         /// A private key used to sign messages.
         ///
         /// A private key forms one half of a [`Keypair`], together with a [`PublicKey`]. The
@@ -216,7 +216,7 @@ pub mod ed25519 {
         /// PRIVATE_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-        PrivateKey(PRIVATE_KEY_LENGTH);
+        pub PrivateKey(PRIVATE_KEY_LENGTH);
 
         /// A seed used to deterministically derive a [`Keypair`].
         ///
@@ -238,7 +238,7 @@ pub mod ed25519 {
         /// KEYPAIR_SEED_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-        Seed(KEYPAIR_SEED_LENGTH);
+        pub Seed(KEYPAIR_SEED_LENGTH);
     }
 
     /// A public key used to verify message signatures.

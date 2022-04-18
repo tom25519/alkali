@@ -80,7 +80,7 @@ pub enum KDFError {
 /// Key derivation based on the [BLAKE2b](https://www.blake2.net) hash function.
 pub mod blake2b {
     use super::KDFError;
-    use crate::{assert_not_err, hardened_buffer, require_init, AlkaliError};
+    use crate::{assert_not_err, mem, require_init, AlkaliError};
     use libsodium_sys as sodium;
     use std::ffi::CString;
 
@@ -96,7 +96,7 @@ pub mod blake2b {
     /// The maximum subkey length which can be derived using this API, in bytes.
     pub const SUBKEY_LENGTH_MAX: usize = sodium::crypto_kdf_blake2b_BYTES_MAX as usize;
 
-    hardened_buffer! {
+    mem::hardened_buffer! {
         /// An original secret key from which subkeys can be derived.
         ///
         /// There are no *technical* constraints on the contents of a key, but it should be
@@ -111,7 +111,7 @@ pub mod blake2b {
         /// KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is an
         /// `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's [secure
         /// memory utilities](https://doc.libsodium.org/memory_management).
-        Key(KEY_LENGTH);
+        pub Key(KEY_LENGTH);
     }
 
     impl Key {

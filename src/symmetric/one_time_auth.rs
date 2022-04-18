@@ -131,7 +131,7 @@ pub enum OneTimeAuthError {
 /// The [Poly1305](https://en.wikipedia.org/wiki/Poly1305) Message Authentication Code.
 pub mod poly1305 {
     use super::OneTimeAuthError;
-    use crate::{assert_not_err, hardened_buffer, mem, require_init, unexpected_err, AlkaliError};
+    use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
     use libsodium_sys as sodium;
     use std::marker::PhantomData;
     use std::ptr;
@@ -145,7 +145,7 @@ pub mod poly1305 {
     /// length.
     pub const TAG_LENGTH: usize = sodium::crypto_onetimeauth_poly1305_BYTES as usize;
 
-    hardened_buffer! {
+    mem::hardened_buffer! {
         /// One-time secret key for message authentication.
         ///
         /// There are no *technical* constraints on the contents of a key, but it should be
@@ -162,7 +162,7 @@ pub mod poly1305 {
         /// KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is an
         /// `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's [secure
         /// memory utilities](https://doc.libsodium.org/memory_management).
-        Key(KEY_LENGTH);
+        pub Key(KEY_LENGTH);
     }
 
     impl Key {
@@ -411,7 +411,7 @@ pub mod poly1305 {
             };
             assert_not_err!(finalise_result, "crypto_onetimeauth_poly1305_final");
 
-            if crate::util::eq(tag, &actual_tag)? {
+            if mem::eq(tag, &actual_tag)? {
                 Ok(())
             } else {
                 Err(OneTimeAuthError::AuthenticationFailed.into())

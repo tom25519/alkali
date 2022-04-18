@@ -113,7 +113,7 @@ pub enum KeyExchangeError {
 /// [BLAKE2b](https://www.blake2.net/) hash function.
 pub mod x25519blake2b {
     use super::KeyExchangeError;
-    use crate::{assert_not_err, hardened_buffer, require_init, AlkaliError};
+    use crate::{assert_not_err, mem, require_init, AlkaliError};
     use libsodium_sys as sodium;
 
     /// The length of a private key for key exchange, in bytes.
@@ -128,7 +128,7 @@ pub mod x25519blake2b {
     /// The length of a seed to use for the deterministic generation of a [`Keypair`].
     pub const KEY_SEED_LENGTH: usize = sodium::crypto_kx_SEEDBYTES as usize;
 
-    hardened_buffer! {
+    mem::hardened_buffer! {
         /// A private key used by a party in a key exchange.
         ///
         /// A private key forms one half of a [`Keypair`], together with a [`PublicKey`].
@@ -152,7 +152,7 @@ pub mod x25519blake2b {
         /// # Security Considerations
         /// In this API, private keys are stored *unclamped*. If you intend to use this private key
         /// with a different X25519 implementation, it may need to be clamped before use.
-        PrivateKey(PRIVATE_KEY_LENGTH);
+        pub PrivateKey(PRIVATE_KEY_LENGTH);
 
         /// A "transmit" session key derived from a key exchange.
         ///
@@ -167,7 +167,7 @@ pub mod x25519blake2b {
         /// SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-        TransmitKey(SESSION_KEY_LENGTH);
+        pub TransmitKey(SESSION_KEY_LENGTH);
 
         /// A "receive" session key derived from a key exchange.
         ///
@@ -182,7 +182,7 @@ pub mod x25519blake2b {
         /// SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-        ReceiveKey(SESSION_KEY_LENGTH);
+        pub ReceiveKey(SESSION_KEY_LENGTH);
 
         /// A seed used to deterministically derive a [`Keypair`].
         ///
@@ -199,7 +199,7 @@ pub mod x25519blake2b {
         /// SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
-        Seed(KEY_SEED_LENGTH);
+        pub Seed(KEY_SEED_LENGTH);
     }
 
     /// A public key used as part of key exchange.
