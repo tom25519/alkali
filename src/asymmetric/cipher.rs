@@ -28,9 +28,11 @@
 //!
 //! # Security Considerations
 //! For the algorithms in this module, nonces must *never* be used more than once with the same key.
-//! Nonces for the algorithms here are sufficiently long that a nonce can be randomly chosen for
-//! every message using [`generate_nonce`], and the probability of nonce reuse will be effectively
-//! zero.
+//! If you supply `None` as the nonce for [`Keypair::encrypt`] (or any of the other encryption
+//! functions), a nonce will be randomly generated for you, and the chance of nonce-reuse is
+//! effectively zero. However, if you need to specify your own nonces for each message, please
+//! ensure a given nonce is never reused: Random nonce generation with [`generate_nonce`] will
+//! probably be your best strategy.
 //!
 //! The [`PrivateKey`] type stores the private key *unclamped* in memory. While the implementation
 //! always clamps it before use, other implementations may not do so, so if you choose to use keys
@@ -85,10 +87,12 @@
 //! let sender_keypair = cipher::Keypair::generate().unwrap();
 //! // An encrypted message will be `MAC_LENGTH` bytes longer than the original message.
 //! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len() + cipher::MAC_LENGTH];
-//! // Generate a random nonce for this encryption operation. Nonces must never be reused!
-//! let nonce = cipher::generate_nonce().unwrap();
-//! // If this function is successful, the ciphertext + a MAC will be stored in `ciphertext`.
-//! sender_keypair.encrypt(MESSAGE.as_bytes(), &receiver_pub, &nonce, &mut ciphertext).unwrap();
+//! // If this function is successful, the ciphertext + a MAC will be stored in `ciphertext`. A
+//! // random nonce will be generated for this message, and returned to be stored in `nonce`. We
+//! // will need this to perform the decryption.
+//! let (_, nonce) = sender_keypair.encrypt(
+//!     MESSAGE.as_bytes(), &receiver_pub, None, &mut ciphertext
+//! ).unwrap();
 //!
 //!
 //! // ...
@@ -131,8 +135,11 @@
 //! let session_key = sender_keypair.session_key(&receiver_pub).unwrap();
 //! // Use the session key to encrypt the message, rather than the keypair.
 //! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len() + cipher::MAC_LENGTH];
+//! // Here, we'll generate a random nonce ourselves rather than letting alkali randomly generate
+//! // one for us. It is vital that a given nonce is never reused with the same key, so it is best
+//! // to randomly generate a nonce for every message.
 //! let nonce = cipher::generate_nonce().unwrap();
-//! session_key.encrypt(MESSAGE.as_bytes(), &nonce, &mut ciphertext).unwrap();
+//! session_key.encrypt(MESSAGE.as_bytes(), Some(&nonce), &mut ciphertext).unwrap();
 //!
 //!
 //! // ...
@@ -174,9 +181,8 @@
 //! // In detached mode, the ciphertext length is identical to the plaintext length.
 //! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len()];
 //! // Encrypt the ciphertext, returning a MAC.
-//! let nonce = cipher::generate_nonce().unwrap();
-//! let (_, mac) = sender_keypair
-//!     .encrypt_detached(MESSAGE.as_bytes(), &receiver_pub, &nonce, &mut ciphertext)
+//! let (_, nonce, mac) = sender_keypair
+//!     .encrypt_detached(MESSAGE.as_bytes(), &receiver_pub, None, &mut ciphertext)
 //!     .unwrap();
 //!
 //!
@@ -361,9 +367,9 @@ macro_rules! cipher_module {
 
         /// A nonce, used to introduce non-determinism into the keystream calculation.
         ///
-        /// Nonces must never be used for multiple messages with the same key. Ideally, generate a
-        /// random nonce for every message using [`generate_nonce`], or use a counter value,
-        /// erroring on overflow.
+        /// Nonces must never be used for multiple messages with the same key. Ideally, let alkali
+        /// generate a random nonce for every message by specifying `None` as the nonce when
+        /// encrypting.
         pub type Nonce = [u8; NONCE_LENGTH];
 
         /// A ([`PrivateKey`], [`PublicKey`]) keypair, used for asymmetric AE.
@@ -539,11 +545,13 @@ macro_rules! cipher_module {
             /// the party for whom we are encrypting this message.
             ///
             /// `nonce` should be a [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) to
-            /// use in the encryption process. It is vital that nonces are never reused for more
-            /// than one message under the same key. It is easiest to ensure this will be the case
-            /// by generating a random nonce for every message using [`generate_nonce`]. Nonces are
-            /// not secret, but will need to be communicated to the decrypting party for them to be
-            /// able to decrypt the message.
+            /// use in the encryption process. It is recommended that this be set to `None`, which
+            /// will cause alkali to randomly generate a nonce for the message. If you specify a
+            /// custom nonce, it is vital the nonce is never used to encrypt more than one message
+            /// under the same key: Nonce reuse could result in an attacker recovering the secret
+            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
+            /// for them to be able to decrypt the message. This function will return the nonce used
+            /// for the encryption of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be
             /// [`MAC_LENGTH`] bytes longer than `message`, so `output` must be of sufficient size
@@ -551,18 +559,20 @@ macro_rules! cipher_module {
             /// sufficient to store the ciphertext.
             ///
             /// If encryption is successful, returns the number of bytes written to `output` (this
-            /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes).
+            /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes), and the [`Nonce`]
+            /// used for the encryption process.
             ///
             /// # Security Considerations
-            /// Nonces must *never* be used more than once with the same key. You should generate a
-            /// random nonce for each message using [`generate_nonce`].
+            /// Nonces must *never* be used more than once with the same key. You should specify
+            /// `None` for the nonce to use, which will cause a random nonce to be generated for
+            /// every message, unless you have good reason to do otherwise.
             pub fn encrypt(
                 &self,
                 message: &[u8],
                 receiver: &PublicKey,
-                nonce: &Nonce,
+                nonce: Option<&Nonce>,
                 output: &mut [u8],
-            ) -> Result<usize, AlkaliError> {
+            ) -> Result<(usize, Nonce), AlkaliError> {
                 require_init()?;
 
                 let c_len = message.len() + MAC_LENGTH;
@@ -572,6 +582,12 @@ macro_rules! cipher_module {
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
                     return Err(CipherError::MessageTooLong.into());
                 }
+
+                let nonce = if let Some(&n) = nonce {
+                    n
+                } else {
+                    generate_nonce()?
+                };
 
                 let encrypt_result = unsafe {
                     // SAFETY: The first argument to this function is the destination to which the
@@ -605,7 +621,7 @@ macro_rules! cipher_module {
                 };
 
                 if encrypt_result == 0 {
-                    Ok(c_len)
+                    Ok((c_len, nonce))
                 } else {
                     Err(CipherError::PublicKeyUnacceptable.into())
                 }
@@ -689,11 +705,13 @@ macro_rules! cipher_module {
             /// the party for whom we are encrypting this message.
             ///
             /// `nonce` should be a [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) to
-            /// use in the encryption process. It is vital that nonces are never reused for more
-            /// than one message under the same key. It is easiest to ensure this will be the case
-            /// by generating a random nonce for every message using [`generate_nonce`]. Nonces are
-            /// not secret, but will need to be communicated to the decrypting party for them to be
-            /// able to decrypt the message.
+            /// use in the encryption process. It is recommended that this be set to `None`, which
+            /// will cause alkali to randomly generate a nonce for the message. If you specify a
+            /// custom nonce, it is vital the nonce is never used to encrypt more than one message
+            /// under the same key: Nonce reuse could result in an attacker recovering the secret
+            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
+            /// for them to be able to decrypt the message. This function will return the nonce used
+            /// for the encryption of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be the
             /// same length as `message`, so `output` must be of sufficient size to store at least
@@ -701,19 +719,20 @@ macro_rules! cipher_module {
             /// the ciphertext.
             ///
             /// If encryption is successful, returns the number of bytes written to `output` (this
-            /// will actually always be `message.len()` bytes), and the authentication tag for the
-            /// ciphertext (a [`MAC`]).
+            /// will actually always be `message.len()` bytes), the [`Nonce`] used for the
+            /// encryption process, and the authentication tag for the ciphertext (a [`MAC`]).
             ///
             /// # Security Considerations
-            /// Nonces must *never* be used more than once with the same key. You should generate a
-            /// random nonce for each message using [`generate_nonce`].
+            /// Nonces must *never* be used more than once with the same key. You should specify
+            /// `None` for the nonce to use, which will cause a random nonce to be generated for
+            /// every message, unless you have good reason to do otherwise.
             pub fn encrypt_detached(
                 &self,
                 message: &[u8],
                 receiver: &PublicKey,
-                nonce: &Nonce,
+                nonce: Option<&Nonce>,
                 output: &mut [u8],
-            ) -> Result<(usize, MAC), AlkaliError> {
+            ) -> Result<(usize, Nonce, MAC), AlkaliError> {
                 require_init()?;
 
                 if output.len() < message.len() {
@@ -721,6 +740,12 @@ macro_rules! cipher_module {
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
                     return Err(CipherError::MessageTooLong.into());
                 }
+
+                let nonce = if let Some(&n) = nonce {
+                    n
+                } else {
+                    generate_nonce()?
+                };
 
                 let mut mac = [0u8; MAC_LENGTH];
 
@@ -758,7 +783,7 @@ macro_rules! cipher_module {
                 };
 
                 if encrypt_result == 0 {
-                    Ok((message.len(), mac))
+                    Ok((message.len(), nonce, mac))
                 } else {
                     Err(CipherError::PublicKeyUnacceptable.into())
                 }
@@ -842,11 +867,13 @@ macro_rules! cipher_module {
             /// `message` should be the message to encrypt.
             ///
             /// `nonce` should be a [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) to
-            /// use in the encryption process. It is vital that nonces are never reused for more
-            /// than one message under the same key. It is easiest to ensure this will be the case
-            /// by generating a random nonce for every message using [`generate_nonce`]. Nonces are
-            /// not secret, but will need to be communicated to the decrypting party for them to be
-            /// able to decrypt the message.
+            /// use in the encryption process. It is recommended that this be set to `None`, which
+            /// will cause alkali to randomly generate a nonce for the message. If you specify a
+            /// custom nonce, it is vital the nonce is never used to encrypt more than one message
+            /// under the same key: Nonce reuse could result in an attacker recovering the secret
+            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
+            /// for them to be able to decrypt the message. This function will return the nonce used
+            /// for the encryption of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be
             /// [`MAC_LENGTH`] bytes longer than `message`, so `output` must be of sufficient size
@@ -854,17 +881,19 @@ macro_rules! cipher_module {
             /// sufficient to store the ciphertext.
             ///
             /// If encryption is successful, returns the number of bytes written to `output` (this
-            /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes).
+            /// will actually always be `message.len()` + [`MAC_LENGTH`] bytes), and the [`Nonce`]
+            /// used for the encryption process.
             ///
             /// # Security Considerations
-            /// Nonces must *never* be used more than once with the same key. You should generate a
-            /// random nonce for each message using [`generate_nonce`].
+            /// Nonces must *never* be used more than once with the same key. You should specify
+            /// `None` for the nonce to use, which will cause a random nonce to be generated for
+            /// every message, unless you have good reason to do otherwise.
             pub fn encrypt(
                 &self,
                 message: &[u8],
-                nonce: &Nonce,
+                nonce: Option<&Nonce>,
                 output: &mut [u8],
-            ) -> Result<usize, AlkaliError> {
+            ) -> Result<(usize, Nonce), AlkaliError> {
                 require_init()?;
 
                 let c_len = message.len() + MAC_LENGTH;
@@ -874,6 +903,12 @@ macro_rules! cipher_module {
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
                     return Err(CipherError::MessageTooLong.into());
                 }
+
+                let nonce = if let Some(&n) = nonce {
+                    n
+                } else {
+                    generate_nonce()?
+                };
 
                 let encrypt_result = unsafe {
                     // SAFETY: The first argument to this function is the destination to which the
@@ -903,7 +938,7 @@ macro_rules! cipher_module {
                 };
 
                 if encrypt_result == 0 {
-                    Ok(c_len)
+                    Ok((c_len, nonce))
                 } else {
                     Err(CipherError::PublicKeyUnacceptable.into())
                 }
@@ -981,11 +1016,13 @@ macro_rules! cipher_module {
             /// `message` should be the message to encrypt.
             ///
             /// `nonce` should be a [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) to
-            /// use in the encryption process. It is vital that nonces are never reused for more
-            /// than one message under the same key. It is easiest to ensure this will be the case
-            /// by generating a random nonce for every message using [`generate_nonce`]. Nonces are
-            /// not secret, but will need to be communicated to the decrypting party for them to be
-            /// able to decrypt the message.
+            /// use in the encryption process. It is recommended that this be set to `None`, which
+            /// will cause alkali to randomly generate a nonce for the message. If you specify a
+            /// custom nonce, it is vital the nonce is never used to encrypt more than one message
+            /// under the same key: Nonce reuse could result in an attacker recovering the secret
+            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
+            /// for them to be able to decrypt the message. This function will return the nonce used
+            /// for the encryption of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be the
             /// same length as `message`, so `output` must be of sufficient size to store at least
@@ -993,18 +1030,19 @@ macro_rules! cipher_module {
             /// the ciphertext.
             ///
             /// If encryption is successful, returns the number of bytes written to `output` (this
-            /// will actually always be `message.len()` bytes), and the authentication tag for the
-            /// ciphertext (a [`MAC`]).
+            /// will actually always be `message.len()` bytes), the [`Nonce`] used for the
+            /// encryption process, and the authentication tag for the ciphertext (a [`MAC`]).
             ///
             /// # Security Considerations
-            /// Nonces must *never* be used more than once with the same key. You should generate a
-            /// random nonce for each message using [`generate_nonce`].
+            /// Nonces must *never* be used more than once with the same key. You should specify
+            /// `None` for the nonce to use, which will cause a random nonce to be generated for
+            /// every message, unless you have good reason to do otherwise.
             pub fn encrypt_detached(
                 &self,
                 message: &[u8],
-                nonce: &Nonce,
+                nonce: Option<&Nonce>,
                 output: &mut [u8],
-            ) -> Result<(usize, MAC), AlkaliError> {
+            ) -> Result<(usize, Nonce, MAC), AlkaliError> {
                 require_init()?;
 
                 if output.len() < message.len() {
@@ -1012,6 +1050,12 @@ macro_rules! cipher_module {
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
                     return Err(CipherError::MessageTooLong.into());
                 }
+
+                let nonce = if let Some(&n) = nonce {
+                    n
+                } else {
+                    generate_nonce()?
+                };
 
                 let mut mac = [0u8; MAC_LENGTH];
 
@@ -1045,7 +1089,7 @@ macro_rules! cipher_module {
                 };
 
                 if encrypt_result == 0 {
-                    Ok((message.len(), mac))
+                    Ok((message.len(), nonce, mac))
                 } else {
                     Err(CipherError::PublicKeyUnacceptable.into())
                 }
@@ -1191,6 +1235,12 @@ macro_rules! cipher_tests {
         }
 
         #[test]
+        fn nonce_generation() -> Result<(), AlkaliError> {
+            let _nonce = generate_nonce()?;
+            Ok(())
+        }
+
+        #[test]
         fn enc_and_dec() -> Result<(), AlkaliError> {
             let x = Keypair::generate()?;
             let y = Keypair::generate()?;
@@ -1209,15 +1259,10 @@ macro_rules! cipher_tests {
             let mut c_c = [0; 1024 + MAC_LENGTH];
             let mut c_d = [0; (1 << 18) + MAC_LENGTH];
 
-            let nonce_a = generate_nonce()?;
-            let nonce_b = generate_nonce()?;
-            let nonce_c = generate_nonce()?;
-            let nonce_d = generate_nonce()?;
-
-            let mut l_a = x.encrypt(&msg_a, &y.public_key, &nonce_a, &mut c_a)?;
-            let mut l_b = x.encrypt(&msg_b, &y.public_key, &nonce_b, &mut c_b)?;
-            let mut l_c = x.encrypt(&msg_c, &y.public_key, &nonce_c, &mut c_c)?;
-            let mut l_d = x.encrypt(&msg_d, &y.public_key, &nonce_d, &mut c_d)?;
+            let (mut l_a, nonce_a) = x.encrypt(&msg_a, &y.public_key, None, &mut c_a)?;
+            let (mut l_b, nonce_b) = x.encrypt(&msg_b, &y.public_key, None, &mut c_b)?;
+            let (mut l_c, nonce_c) = x.encrypt(&msg_c, &y.public_key, None, &mut c_c)?;
+            let (mut l_d, nonce_d) = x.encrypt(&msg_d, &y.public_key, None, &mut c_d)?;
 
             assert_eq!(l_a, MAC_LENGTH);
             assert_eq!(l_b, 16 + MAC_LENGTH);
@@ -1266,19 +1311,14 @@ macro_rules! cipher_tests {
             let mut c_c = [0; 1024];
             let mut c_d = [0; 1 << 18];
 
-            let nonce_a = generate_nonce()?;
-            let nonce_b = generate_nonce()?;
-            let nonce_c = generate_nonce()?;
-            let nonce_d = generate_nonce()?;
-
-            let (mut l_a, mut mac_a) =
-                x.encrypt_detached(&msg_a, &y.public_key, &nonce_a, &mut c_a)?;
-            let (mut l_b, mac_b) =
-                x.encrypt_detached(&msg_b, &y.public_key, &nonce_b, &mut c_b)?;
-            let (mut l_c, mac_c) =
-                x.encrypt_detached(&msg_c, &y.public_key, &nonce_c, &mut c_c)?;
-            let (mut l_d, mac_d) =
-                x.encrypt_detached(&msg_d, &y.public_key, &nonce_d, &mut c_d)?;
+            let (mut l_a, nonce_a, mut mac_a) =
+                x.encrypt_detached(&msg_a, &y.public_key, None, &mut c_a)?;
+            let (mut l_b, nonce_b, mac_b) =
+                x.encrypt_detached(&msg_b, &y.public_key, None, &mut c_b)?;
+            let (mut l_c, nonce_c, mac_c) =
+                x.encrypt_detached(&msg_c, &y.public_key, None, &mut c_c)?;
+            let (mut l_d, nonce_d, mac_d) =
+                x.encrypt_detached(&msg_d, &y.public_key, None, &mut c_d)?;
 
             assert_eq!(l_a, 0);
             assert_eq!(l_b, 16);
@@ -1329,15 +1369,10 @@ macro_rules! cipher_tests {
             let mut c_c = [0; 1024 + MAC_LENGTH];
             let mut c_d = [0; (1 << 18) + MAC_LENGTH];
 
-            let nonce_a = generate_nonce()?;
-            let nonce_b = generate_nonce()?;
-            let nonce_c = generate_nonce()?;
-            let nonce_d = generate_nonce()?;
-
-            let mut l_a = key.encrypt(&msg_a, &nonce_a, &mut c_a)?;
-            let mut l_b = key.encrypt(&msg_b, &nonce_b, &mut c_b)?;
-            let mut l_c = key.encrypt(&msg_c, &nonce_c, &mut c_c)?;
-            let mut l_d = key.encrypt(&msg_d, &nonce_d, &mut c_d)?;
+            let (mut l_a, nonce_a) = key.encrypt(&msg_a, None, &mut c_a)?;
+            let (mut l_b, nonce_b) = key.encrypt(&msg_b, None, &mut c_b)?;
+            let (mut l_c, nonce_c) = key.encrypt(&msg_c, None, &mut c_c)?;
+            let (mut l_d, nonce_d) = key.encrypt(&msg_d, None, &mut c_d)?;
 
             assert_eq!(l_a, MAC_LENGTH);
             assert_eq!(l_b, 16 + MAC_LENGTH);
@@ -1388,15 +1423,10 @@ macro_rules! cipher_tests {
             let mut c_c = [0; 1024];
             let mut c_d = [0; 1 << 18];
 
-            let nonce_a = generate_nonce()?;
-            let nonce_b = generate_nonce()?;
-            let nonce_c = generate_nonce()?;
-            let nonce_d = generate_nonce()?;
-
-            let (mut l_a, mut mac_a) = key.encrypt_detached(&msg_a, &nonce_a, &mut c_a)?;
-            let (mut l_b, mac_b) = key.encrypt_detached(&msg_b, &nonce_b, &mut c_b)?;
-            let (mut l_c, mac_c) = key.encrypt_detached(&msg_c, &nonce_c, &mut c_c)?;
-            let (mut l_d, mac_d) = key.encrypt_detached(&msg_d, &nonce_d, &mut c_d)?;
+            let (mut l_a, nonce_a, mut mac_a) = key.encrypt_detached(&msg_a, None, &mut c_a)?;
+            let (mut l_b, nonce_b, mac_b) = key.encrypt_detached(&msg_b, None, &mut c_b)?;
+            let (mut l_c, nonce_c, mac_c) = key.encrypt_detached(&msg_c, None, &mut c_c)?;
+            let (mut l_d, nonce_d, mac_d) = key.encrypt_detached(&msg_d, None, &mut c_d)?;
 
             assert_eq!(l_a, 0);
             assert_eq!(l_b, 16);
@@ -1439,7 +1469,8 @@ macro_rules! cipher_tests {
 
                 let c_len = $msg.len() + MAC_LENGTH;
                 let mut c = vec![0; c_len];
-                assert_eq!(a.encrypt(&$msg, &b.public_key, &$nonce, &mut c)?, c_len);
+                let (l, _) = a.encrypt(&$msg, &b.public_key, Some(&$nonce), &mut c)?;
+                assert_eq!(l, c_len);
                 assert_eq!(&c[..MAC_LENGTH], &$mac[..]);
                 assert_eq!(&c[MAC_LENGTH..], &$c[..]);
 
@@ -1463,7 +1494,7 @@ macro_rules! cipher_tests {
                 let b = Keypair::from_private_key(&priv_b)?;
 
                 let mut c = vec![0; $msg.len()];
-                let (l, mac) = a.encrypt_detached(&$msg, &b.public_key, &$nonce, &mut c)?;
+                let (l, _, mac) = a.encrypt_detached(&$msg, &b.public_key, Some(&$nonce), &mut c)?;
                 assert_eq!(l, $msg.len());
                 assert_eq!(&c, &$c);
                 assert_eq!(&mac, &$mac);
@@ -1490,7 +1521,8 @@ macro_rules! cipher_tests {
                 let key = a.session_key(&b.public_key)?;
                 let c_len = $msg.len() + MAC_LENGTH;
                 let mut c = vec![0; c_len];
-                assert_eq!(key.encrypt(&$msg, &$nonce, &mut c)?, c_len);
+                let (l, _) = key.encrypt(&$msg, Some(&$nonce), &mut c)?;
+                assert_eq!(l, c_len);
                 assert_eq!(&c[..MAC_LENGTH], &$mac);
                 assert_eq!(&c[MAC_LENGTH..], &$c);
 
@@ -1516,7 +1548,7 @@ macro_rules! cipher_tests {
 
                 let key = a.session_key(&b.public_key)?;
                 let mut c = vec![0; $msg.len()];
-                let (l, mac) = key.encrypt_detached(&$msg, &$nonce, &mut c)?;
+                let (l, _, mac) = key.encrypt_detached(&$msg, Some(&$nonce), &mut c)?;
                 assert_eq!(l, $msg.len());
                 assert_eq!(&c, &$c);
                 assert_eq!(&mac, &$mac);

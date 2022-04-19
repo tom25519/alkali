@@ -56,6 +56,9 @@
 //! region is "locked", which advises the operating system not to swap it to disk if it would
 //! normally do so, and not to include the memory contents in crash reports/core dumps.
 //!
+//! Custom hardened types can be created using the [`hardened_buffer`] macro, or the [`anon_buffer`]
+//! macro to produce an anonymous array-like buffer backed by hardened memory.
+//!
 //! In the future, we should be able to use the [Allocator
 //! API](https://doc.rust-lang.org/std/alloc/trait.Allocator.html) to simplify these types, but for
 //! the time being, we have to do a fair amount of manual memory management under the hood to
