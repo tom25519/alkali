@@ -43,6 +43,9 @@
 //! Therefore, access to these types is feature-gated behind the `alloc` feature. You can enable
 //! this if you wish to make use of the API, but it will cause builds to fail on stable Rust.
 
+// TODO: Testing for SodiumAllocator, HardenedBox, HardenedVec, hardened_buffer, anon_buffer
+// TODO: Protected types for hardened_buffer (noaccess/readonly)
+
 use crate::{require_init, AlkaliError};
 use libsodium_sys as sodium;
 use std::alloc::Layout;

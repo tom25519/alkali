@@ -1,9 +1,9 @@
-//! Cryptographically secure pseudo-random number generation.
+//! Random data suitable for cryptographic use.
 //!
 //! This module is a wrapper around the [`randombytes`
 //! API](https://doc.libsodium.org/generating_random_data) from Sodium.
 //!
-//! Being able to unpredictably generate random data is vital to cryptography. This module provides
+//! Being able to generate unpredictable data is vital to cryptography. This module provides
 //! utilities to generate such random data. By default, random data is sourced from the platform's
 //! secure RNG API (e.g: /dev/urandom), but [`fill_random_from_seed`] can be used for deterministic
 //! pseudo-random number generation if this is required for testing purposes.
@@ -59,7 +59,11 @@ mem::hardened_buffer! {
     /// immediately after use.
     ///
     /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will be
-    /// zeroed on drop. A number of other security measures are taken to protect its contents.
+    /// zeroed on drop. A number of other security measures are taken to protect its contents. This
+    /// type in particular can be thought of as roughly equivalent to a `[u8; SEED_LENGTH]`, and
+    /// implements [`std::ops::Deref`], so it can be used like it is an `&[u8]`. This struct uses
+    /// heap memory while in scope, allocated using Sodium's [secure memory
+    /// utilities](https://doc.libsodium.org/memory_management).
     pub Seed(SEED_LENGTH)
 }
 
@@ -141,37 +145,34 @@ pub fn random_u32_in_range(low: u32, high: u32) -> Result<u32, AlkaliError> {
     Ok(low + unshifted)
 }
 
-/// Fill `buf` with pseudo-random data suitable for cryptographic use.
+/// Fill `buf` with random data suitable for cryptographic use.
 ///
-/// Returns the number of bytes written to `buf`, or [`AlkaliError::SodiumInitFailed`] if Sodium
-/// could not be correctly initialised.
-pub fn fill_random(buf: &mut [u8]) -> Result<usize, AlkaliError> {
+/// Returns an error if Sodium could not be correctly initialised.
+pub fn fill_random(buf: &mut [u8]) -> Result<(), AlkaliError> {
     require_init()?;
 
     unsafe {
-        // SAFETY: `randombytes_buf` takes two arguments, `buf` and `size`. It writes `size` bytes
-        // of random data, starting at the pointer `buf`. Here, we specify `buf.len()` as size, and
-        // `buf` as the pointer to which the data should be written, so there is definitely
-        // sufficient space allocated to write the data. Therefore this function call is safe as
-        // long as Sodium has been initialised, which we ensure with the call to `require_init`
-        // above.
+        // SAFETY: The first argument to this function should be a pointer to which random data will
+        // be written, and the second argument should be the number of bytes to write, starting at
+        // the pointer. We use `buf.len()` to specify the number of bytes to write, so `buf` is
+        // clearly valid for writes of the required length.
         sodium::randombytes_buf(buf.as_mut_ptr() as *mut libc::c_void, buf.len());
     }
 
-    Ok(buf.len())
+    Ok(())
 }
 
 /// Fills `buf` with pseudo-random data generated from the seed `seed`.
 ///
 /// With the same seed, the same pseudo-random data will be generated, making this function useful
-/// for tests. The generated data still satisfies the expected properties of unpredictability, as
-/// long as the seed is not known to an attacker.
+/// for testing purposes. The generated data will be indistinguishable from random data to a party
+/// who does not know the seed.
 ///
 /// Only up to 2^38 bytes (=256 GiB) of data can be generated using this function with a specific
 /// seed, otherwise an error will be encountered.
 ///
-/// Returns the number of bytes written to `buf`, or an [`AlkaliError`] if Sodium could not be
-/// correctly initialised, or if too many bytes were requested from this seed.
+/// Returns an [`AlkaliError`] if Sodium could not be correctly initialised, or if too many bytes
+/// were requested from this seed.
 pub fn fill_random_from_seed(buf: &mut [u8], seed: &Seed) -> Result<usize, AlkaliError> {
     require_init()?;
 
@@ -184,14 +185,14 @@ pub fn fill_random_from_seed(buf: &mut [u8], seed: &Seed) -> Result<usize, Alkal
     }
 
     unsafe {
-        // SAFETY: `randombytes_buf_deterministic` takes three arguments, `buf`, `size`, and
-        // `seed`. It writes `size` bytes of random data, starting at the pointer `buf`, generated
-        // using the seed `seed`. Here, we specify `buf.len()` as size, and `buf` as the pointer to
-        // which the data should be written, so there is definitely sufficient space allocated to
-        // write the data. Furthermore, the `Seed` type we have specified as an argument to this
-        // function has been defined so as to be the expected size for use with
-        // `randombytes_buf_deterministic`. Therefore, this function call is safe as long as Sodium
-        // has been initialised, which we ensure with the call to `require_init` above.
+        // SAFETY: The first argument to this function should be a pointer to which pseudo-random
+        // data will be written, and the second argument should be the number of bytes to write,
+        // starting at the pointer. We use `buf.len()` to specify the number of bytes to write, so
+        // `buf` is clearly valid for writes of the required length. The third argument should be a
+        // pointer to the seed to use for the pseudorandom number generation. We define the `Seed`
+        // type to store `randombytes_SEEDBYTES` bytes of data, the length of a seed for this PRNG,
+        // so `seed` is valid for reads of the required length. The `Seed::inner` method simply
+        // returns an immutable pointer to its backing memory.
         sodium::randombytes_buf_deterministic(
             buf.as_mut_ptr() as *mut libc::c_void,
             buf.len(),
@@ -211,13 +212,12 @@ mod tests {
     use super::{
         fill_random, fill_random_from_seed, random_u32, random_u32_in_range, Seed, SodiumRng,
     };
+    use crate::AlkaliError;
     use rand_core::{Error as RandError, RngCore};
     use std::collections::HashSet;
 
-    type TestResult = Result<(), crate::AlkaliError>;
-
     #[test]
-    fn random_u32_appears_random() -> TestResult {
+    fn random_u32_appears_random() -> Result<(), AlkaliError> {
         let mut x: u32;
 
         for shift in [0, 8, 16, 24] {
@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn random_u32_in_range_appears_random() -> TestResult {
+    fn random_u32_in_range_appears_random() -> Result<(), AlkaliError> {
         let mut seen = [false; 256];
         let mut x: u32;
 
@@ -252,17 +252,17 @@ mod tests {
     }
 
     #[test]
-    fn fill_random_appears_random() -> TestResult {
+    fn fill_random_appears_random() -> Result<(), AlkaliError> {
         let mut buf = [0u8; 65536];
         fill_random(&mut buf)?;
         let unique: HashSet<_> = buf.iter().collect();
-        assert!(unique.len() == 256);
+        assert_eq!(unique.len(), 256);
 
         Ok(())
     }
 
     #[test]
-    fn fill_random_from_seed_vector() -> TestResult {
+    fn fill_random_from_seed_vector() -> Result<(), AlkaliError> {
         let seed = Seed::try_from(&[
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
             0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
@@ -304,7 +304,7 @@ mod tests {
         let mut buf = [0u8; 65536];
         SodiumRng.try_fill_bytes(&mut buf)?;
         let unique: HashSet<_> = buf.iter().collect();
-        assert!(unique.len() == 256);
+        assert_eq!(unique.len(), 256);
 
         Ok(())
     }

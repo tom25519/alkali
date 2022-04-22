@@ -30,11 +30,6 @@ My [age](https://github.com/FiloSottile/age) public key (preferred) is:
 age1gglesedq4m2z9kc7urjhq3zlpc6qewcwpcna7s0lwh8k2c4e6fxqf3kdvq
 ```
 
-My PGP public key has fingerprint `0x4712EC7C9F404B14`, and is available from
-[keyserver.ubuntu.com](https://keyserver.ubuntu.com),
-[pgp.mit.edu](https://pgp.mit.edu/), or
-[Github](https://github.com/tom25519.gpg).
-
 ## License
 Licensed under either of:
 
