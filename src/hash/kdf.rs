@@ -164,8 +164,6 @@ pub mod blake2b {
             return Err(KDFError::SubkeyLengthInvalid.into());
         }
 
-        let context_ptr = context.into_raw();
-
         let derive_result = unsafe {
             // SAFETY: The first argument to this function is the destination to which the derived
             // subkey will be written, and the second argument is the number of bytes which should
@@ -186,16 +184,9 @@ pub mod blake2b {
                 subkey.as_mut_ptr(),
                 subkey.len(),
                 subkey_id,
-                context_ptr,
+                context.as_bytes().as_ptr() as *const libc::c_char,
                 key.inner() as *const libc::c_uchar,
             )
-        };
-
-        // Make sure we free the context string's memory
-        let _context = unsafe {
-            // SAFETY: The `context_ptr` pointer was created using `CString::into_raw`, and has not
-            // yet been freed, so it is safe to use it to initialise a `CString`.
-            CString::from_raw(context_ptr)
         };
 
         assert_not_err!(derive_result, "crypto_kdf_blake2b_derive_from_key");
