@@ -1,21 +1,22 @@
 //! General utilities from Sodium.
 
-use crate::{require_init, AlkaliError};
+use crate::{assert_not_err, require_init, AlkaliError};
 use libsodium_sys as sodium;
 
 /// Treat `number` as a little-endian, unsigned integer, and increment its value by 1.
 ///
-/// Increments `number` in-place.
+/// Increments `number` in-place. This function is especially useful for incrementing nonces for
+/// messages in sequence.
 ///
-/// This function runs in constant-time for a specific length of `number` (in bytes). This is
-/// especially useful for incrementing nonces for messages in sequence.
+/// This function runs in constant-time for a given length of `number` (in bytes).
 pub fn increment_le(number: &mut [u8]) -> Result<(), AlkaliError> {
     require_init()?;
 
     unsafe {
-        // SAFETY: This function expects a pointer to a region of memory and a number of bytes to
-        // interpret as a little endian number. We use `number.len()` as the number of bytes, which
-        // is the size of `number` in bytes, so this is correct for this pointer.
+        // SAFETY: This function expects a pointer and a number of bytes to interpret as a little
+        // endian number, starting at that pointer. We use `number.len()` as the number of bytes,
+        // which is the size of `number` in bytes, so `number` is valid for reads and writes of this
+        // length.
         sodium::sodium_increment(number.as_mut_ptr(), number.len());
     }
 
@@ -25,11 +26,16 @@ pub fn increment_le(number: &mut [u8]) -> Result<(), AlkaliError> {
 /// Add `summand` to `number`, treating both as little-endian, unsigned integers, and writing the
 /// result to `number`.
 ///
-/// The computation is calculated `mod 2^(8 * len)`: In short, the standard wrapping behaviour for
-/// unsigned integers is to be expected. The computation runs in constant time for a given length
-/// of `number` & `summand` (in bytes).
+/// `number` and `summand` must be of the same length, otherwise an error will be returned. Since
+/// the calculation is little-endian, if one value is shorter than the other, you can pad the
+/// shorter value with zeros at the end so the slices are of equal length to obtain a
+/// representation of the same value which can be used with this function.
 ///
-/// Returns an error if `number` and `summand` are not the same length.
+/// The computation is calculated modulo `2^(8 * number.len())`: In short, the standard wrapping
+/// behaviour for unsigned integers is to be expected. So if `number` was 4 bytes long, the sum
+/// would be calculated modulo `2^32`, like if you were adding normal [`u32`] values.
+///
+/// The computation runs in constant time for a given length of `number` (in bytes).
 pub fn add_le(number: &mut [u8], summand: &[u8]) -> Result<(), AlkaliError> {
     require_init()?;
 
@@ -39,42 +45,56 @@ pub fn add_le(number: &mut [u8], summand: &[u8]) -> Result<(), AlkaliError> {
 
     unsafe {
         // SAFETY: This function expects two pointers to numbers to add, and the length of the
-        // numbers. We verify above that the `number` and `summand` slices are of the same length,
-        // and use `number.len()` to specify the length of the two numbers. This is therefore the
-        // correct length for these pointers.
+        // values to read from each pointer, in bytes. We verify above that the `number` and
+        // `summand` slices are of the same length, and use `number.len()` to specify the length of
+        // the two numbers. Therefore `number` is valid for reads and writes of this length, and
+        // `summand` is valid for reads of this length.
         sodium::sodium_add(number.as_mut_ptr(), summand.as_ptr(), number.len());
     }
 
     Ok(())
 }
 
-/// Subtract `subtrahend` from `minuend`, treating both as little-endian, unsigned integers, and
-/// writing the difference to `minuend`.
+/// Subtract `subtrahend` from `number`, treating both as little-endian, unsigned integers, and
+/// writing the difference to `number`.
 ///
-/// The computation is calculated `mod 2^(8 * len)`: In short, the standard wrapping behaviour for
-/// unsigned integers is to be expected. The computation runs in constant time for a given length
-/// of `minuend` & `subtrahend` (in bytes).
+/// `number` and `subtrahend` must be of the same length, otherwise an error will be returned. Since
+/// the calculation is little-endian, if one value is shorter than the other, you can pad the
+/// shorter value with zeros at the end so the slices are of equal length to obtain a
+/// representation of the same value which can be used with this function.
 ///
-/// Returns an error if `minuend` and `subtrahend` are not the same length.
-pub fn sub_le(minuend: &mut [u8], subtrahend: &[u8]) -> Result<(), AlkaliError> {
+/// The computation is calculated modulo `2^(8 * number.len())`: In short, the standard wrapping
+/// behaviour for unsigned integers is to be expected. So if `number` was 4 bytes long, the
+/// difference would be calculated modulo `2^32`, like if you were adding normal [`u32`] values.
+///
+/// The computation runs in constant time for a given length of `number` (in bytes).
+pub fn sub_le(number: &mut [u8], subtrahend: &[u8]) -> Result<(), AlkaliError> {
     require_init()?;
 
-    if minuend.len() != subtrahend.len() {
+    if number.len() != subtrahend.len() {
         return Err(AlkaliError::NumberLengthsDiffer);
     }
 
     unsafe {
-        // SAFETY: This function expects two pointers to numbers to subtract, and the length of the
-        // numbers. We verify above that the `minuend` and `subtrahend` slices are of the same
-        // length, and use `minuend.len()` to specify the length of the two numbers. This is
-        // therefore the correct length for these pointers.
-        sodium::sodium_sub(minuend.as_mut_ptr(), subtrahend.as_ptr(), minuend.len());
+        // SAFETY: This function expects two pointers to numbers to find the difference of, and the
+        // length of the values to read from each pointer, in bytes. We verify above that the
+        // `number` and `subtrahend` slices are of the same length, and use `number.len()` to
+        // specify the length of the two numbers. Therefore `number` is valid for reads and writes
+        // of this length, and `subtrahend` is valid for reads of this length.
+        sodium::sodium_sub(number.as_mut_ptr(), subtrahend.as_ptr(), number.len());
     }
 
     Ok(())
 }
 
-/// Treat `a` and `b` as little-endian, unsigned integers, and compare them.
+/// Treat `a` and `b` as little-endian, unsigned integers, and compare their values.
+///
+/// `a` and `b` must be of the same length, otherwise an error will be returned. Since the
+/// calculation is little-endian, if one value is shorter than the other, you can pad the shorter
+/// value with zeros at the end so the slices are of equal length to obtain a representation of the
+/// same value which can be used with this function.
+///
+/// This function may be used with nonces to prevent replay attacks.
 ///
 /// Returns:
 /// * [`std::cmp::Ordering::Less`] if `a` is less than `b`
@@ -92,9 +112,9 @@ pub fn compare_le(a: &[u8], b: &[u8]) -> Result<std::cmp::Ordering, AlkaliError>
 
     let comparison = unsafe {
         // SAFETY: This function expects two pointers to numbers to compare, and the length of the
-        // numbers. We verify above that the `a` and `b` slices are of the same length, and use
-        // `a.len()` to specify the length of the two numbers. This is therefore the correct length
-        // for these pointers.
+        // values to read from each pointer, in bytes. We verify above that the `a` and `b` slices
+        // are of the same length, and use `a.len()` to specify the length of the two numbers.
+        // Therefore `a` and `b` are valid for reads of this length.
         sodium::sodium_compare(a.as_ptr(), b.as_ptr(), a.len())
     };
 
@@ -108,11 +128,24 @@ pub fn compare_le(a: &[u8], b: &[u8]) -> Result<std::cmp::Ordering, AlkaliError>
 
 /// Add padding to `buf` to extend its length to a multiple of `blocksize`.
 ///
+/// This function is useful if you wish to obscure the length of an encrypted message.
+///
 /// `blocksize` must be at least `1`, otherwise an error will be returned.
+///
+/// # Algorithm Details
+/// This function uses [ISO/IEC
+/// 7816-4](https://en.wikipedia.org/wiki/Padding_(cryptography)#ISO/IEC_7816-4) padding.
 ///
 /// # Security Considerations
 /// If hiding the length of a plaintext is desired, padding should be applied prior to encryption,
 /// and removed after decryption.
+///
+/// Some thought is required to ensure that sufficient padding is applied in some circumstances.
+/// Consider a scenario in which "A" can only send one of two messages to "B", one of which is 1
+/// byte long, and the other is 100 bytes long. If "A" pads to a blocksize of 16, then the length of
+/// the encrypted message will *still* reveal which of the two messages was sent (the first message
+/// will be padded to 16 bytes, the second to 112). This example is obviously contrived, but you
+/// should ensure that your padding scheme is appropriate for your use case.
 pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
     require_init()?;
 
@@ -128,15 +161,15 @@ pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
     let mut padded_len = 0usize;
 
     let pad_result = unsafe {
-        // SAFETY: The first argument to this function is the destination to which the padded
-        // length will be written. We just pass a mutable reference to a `usize`, which is the
-        // expected type for this destination. The next argument specifies a pointer to the buffer
-        // to extend. The next argument specifies the unpadded length of `buf`: We obtained
-        // `original_len` above using `buf.len()`, and then increased the size of the buffer, so
-        // `buf` is definitely at least as large as this. The next argument specifies the block
-        // size to pad to. This can be any size. The final argument is the maximum length that the
-        // padded buffer can be, i.e: The amount of storage allocated for `buf`. We use `buf.len()`
-        // to specify this, so this many bytes can definitely be written to `buf`.
+        // SAFETY: The first argument to this function is a pointer to which the final padded length
+        // will be written. We pass a mutable reference to a `usize`, which is the expected type for
+        // this argument. The next argument specifies a pointer to the buffer to extend. The next
+        // argument specifies the unpadded length of `buf`: We obtained `original_len` above using
+        // `buf.len()`, and then increased the size of the buffer, so `buf` is definitely at least
+        // as large as this. The next argument specifies the block size to pad to. This can be any
+        // size greater than zero, which we verify above. The final argument is the maximum length
+        // to which the buffer can be padded, i.e: The amount of storage allocated for `buf`. We use
+        // `buf.len()` to specify this, so `buf` is definitely valid for writes of this size.
         sodium::sodium_pad(
             &mut padded_len,
             buf.as_mut_ptr(),
@@ -146,11 +179,9 @@ pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
         )
     };
 
-    if pad_result != 0 {
-        return Err(AlkaliError::PaddingError);
-    }
+    assert_not_err!(pad_result, "sodium_pad");
 
-    // Remove any excess zeroes we added when resizing `buf` above
+    // Remove excess zeroes we added when resizing `buf` above
     buf.truncate(padded_len);
 
     Ok(())
@@ -160,29 +191,29 @@ pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
 ///
 /// `buf` should have been previously padded using [`pad`].
 ///
-/// `blocksize` must be at least `1`, otherwise an error will be returned. Returns an error if
-/// `buf` does not appear to be correctly padded.
+/// `blocksize` must be at least `1`, otherwise an error will be returned.
 ///
-/// # Security Considerations
-/// If hiding the length of a plaintext is desired, padding should be applied prior to encryption,
-/// and removed after decryption.
+/// Returns an error if `buf` does not appear to be correctly padded.
+///
+/// # Algorithm Details
+/// This function uses [ISO/IEC
+/// 7816-4](https://en.wikipedia.org/wiki/Padding_(cryptography)#ISO/IEC_7816-4) padding.
 pub fn unpad(buf: &[u8], blocksize: usize) -> Result<&[u8], AlkaliError> {
     require_init()?;
 
-    if blocksize == 0 {
+    if blocksize == 0 || buf.len() < blocksize {
         return Err(AlkaliError::UnpaddingError);
     }
 
     let mut unpadded_len = 0;
 
     let unpad_result = unsafe {
-        // SAFETY: The first argument to this function is the destination to which the unpadded
-        // length will be written. We just pass a mutable reference to a `usize`, which is the
-        // expected type for this destination. The next two arguments specify a pointer to the
-        // buffer for which we should calculate the original length, and its size. We use
-        // `buf.len()` to specify the length, so it is definitely correct for this pointer. The
-        // final argument specifies the block size which `buf` has been padded to, which can be any
-        // value.
+        // SAFETY: The first argument to this function is a pointer to which the unpadded length
+        // will be written. We pass a mutable reference to a `usize`, which is the expected type for
+        // this argument. The next two arguments specify a pointer to the padded buffer for which we
+        // should calculate the original length, and its length. We use `buf.len()` to specify the
+        // length, so `buf` is definitely valid for reads of this length. The final argument
+        // specifies the block size which `buf` has been padded to, which can be any non-zero value.
         sodium::sodium_unpad(&mut unpadded_len, buf.as_ptr(), buf.len(), blocksize)
     };
 
