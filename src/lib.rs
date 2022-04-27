@@ -20,8 +20,8 @@
 //! operations, every party has their own secret key, used to derive a public-key which is shared
 //! with all other parties. Parties need to know each others' public keys to communicate.
 //!
-//! There are also hashing algorithms available in the [`hash`] module, and tools for
-//! cryptographically-secure pseudo-random number generation in the [`random`] module.
+//! There are also hashing algorithms available in the [`hash`] module, and tools for generating
+//! unpredictable (random) data in the [`random`] module.
 //!
 //! <!-- big ugly table -->
 //! | Alkali API | Corresponding Sodium API | Purpose |
@@ -179,6 +179,9 @@ pub enum AlkaliError {
     #[error("PRNG error")]
     RandomError(#[from] random::RandomError),
 
+    #[error("symmetric AEAD error")]
+    AEADError(#[from] symmetric::aead::AEADError),
+
     /// An error occurred in the [`symmetric::auth`] module.
     #[error("authentication error")]
     AuthError(#[from] symmetric::auth::AuthError),
@@ -237,7 +240,7 @@ pub(crate) use assert_not_err;
 /// already been initialised, or [`AlkaliError::SodiumInitFailed`] if the initialisation was
 /// unsuccessful.
 #[doc(hidden)]
-pub fn require_init() -> Result<libc::c_int, crate::AlkaliError> {
+pub fn require_init() -> Result<libc::c_int, AlkaliError> {
     let init_status = unsafe {
         // SAFETY: This function can safely be called multiple times from multiple threads. Once it
         // has been called, all other Sodium functions are also thread-safe.

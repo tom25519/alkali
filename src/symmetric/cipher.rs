@@ -26,7 +26,7 @@
 //! Random nonce generation with [`generate_nonce`] will probably be your best strategy.
 //!
 //! If many trusted parties have access to the secret key, there is no way to prove which one of
-//! them sent a given message without additional data.
+//! them sent a given message without additional information.
 //!
 //! This construction exposes the length of the plaintext. If this is undesirable, apply padding to
 //! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
@@ -75,7 +75,7 @@
 //! // We assume the receiver knows `key`.
 //!
 //! let mut plaintext = vec![0u8; ciphertext.len() - cipher::MAC_LENGTH];
-//! // We `decrypt` function not only decrypts `ciphertext`, but also verifies its authenticity
+//! // The `decrypt` function not only decrypts `ciphertext`, but also verifies its authenticity
 //! // using the included MAC. This operation will fail if a forgery is attempted.
 //! cipher::decrypt(&ciphertext, &key, &nonce, &mut plaintext).unwrap();
 //! assert_eq!(&plaintext, MESSAGE.as_bytes());
@@ -103,13 +103,9 @@
 //!
 //! // In detached mode, the ciphertext length is identical to the plaintext length.
 //! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len()];
-//! // Here, we'll generate a random nonce ourselves rather than letting alkali randomly generate
-//! // one for us. It is vital that a given nonce is never reused with the same key, so it is best
-//! // to randomly generate a nonce for every message.
-//! let nonce = cipher::generate_nonce().unwrap();
 //! // The `encrypt_detached` function will return the MAC of the message separately.
-//! let (_, _, mac) =
-//!     cipher::encrypt_detached(MESSAGE.as_bytes(), &key, Some(&nonce), &mut ciphertext).unwrap();
+//! let (_, nonce, mac) =
+//!     cipher::encrypt_detached(MESSAGE.as_bytes(), &key, None, &mut ciphertext).unwrap();
 //!
 //!
 //! // ...
@@ -244,8 +240,7 @@ macro_rules! cipher_module {
         /// random nonce for every message we wish to encrypt, and the chances of reusing a nonce
         /// are essentially zero.
         ///
-        /// Returns a nonce generated using a Cryptographically Secure Pseudo-Random Number
-        /// Generator, or a [`crate::AlkaliError`] if an error occurred.
+        /// Returns a random nonce, or a [`crate::AlkaliError`] if an error occurred.
         pub fn generate_nonce() -> Result<Nonce, AlkaliError> {
             let mut nonce = [0; NONCE_LENGTH];
             random::fill_random(&mut nonce)?;
@@ -261,10 +256,9 @@ macro_rules! cipher_module {
         /// the encryption process. It is recommended that this be set to `None`, which will cause
         /// alkali to randomly generate a nonce for the message. If you specify a custom nonce, it
         /// is vital the nonce is never used to encrypt more than one message under the same key:
-        /// Nonce reuse could result in an attacker recovering the secret key. Nonces are not
-        /// secret, but will need to be communicated to the decrypting party for them to be able to
-        /// decrypt the message. This function will return the nonce used for the encryption of this
-        /// message.
+        /// Nonce reuse destroys the security of the scheme. Nonces are not secret, but will need to
+        /// be communicated to the decrypting party for them to be able to decrypt the message. This
+        /// function will return the nonce used for the encryption of this message.
         ///
         /// The encrypted ciphertext will be written to `output`. The ciphertext will be
         /// [`MAC_LENGTH`] bytes longer than `message`, so `output` must be of sufficient size to
@@ -295,10 +289,9 @@ macro_rules! cipher_module {
                 return Err(CipherError::MessageTooLong.into());
             }
 
-            let nonce = if let Some(&n) = nonce {
-                n
-            } else {
-                generate_nonce()?
+            let nonce = match nonce {
+                Some(&n) => n,
+                None => generate_nonce()?,
             };
 
             let encrypt_result = unsafe {
@@ -334,8 +327,8 @@ macro_rules! cipher_module {
         /// Decrypt `ciphertext` using the provided `key`, writing the result to `output`.
         ///
         /// `ciphertext` should be the combined ciphertext + MAC to decrypt (previously encrypted
-        /// using [`encrypt`]). `key` should be the the [`Key`] to use to decrypt the message.
-        /// `nonce` should be the [`Nonce`] which was used to encrypt the message.
+        /// using [`encrypt`]). `key` should be the [`Key`] to use to decrypt the message. `nonce`
+        /// should be the [`Nonce`] which was used to encrypt the message.
         ///
         /// The decrypted plaintext will be written to `output`. The plaintext will be
         /// [`MAC_LENGTH`] bytes shorter than `ciphertext`, so `output` must be of sufficient size
@@ -344,7 +337,7 @@ macro_rules! cipher_module {
         ///
         /// Decryption will fail if message authentication fails. If decryption is successful, the
         /// plaintext is written to `output`, and the length of the plaintext will be returned (this
-        /// will always be `ciphertext.len()` - [`MAC_LENGTH`] bytes.
+        /// will always be `ciphertext.len()` - [`MAC_LENGTH`] bytes).
         pub fn decrypt(
             ciphertext: &[u8],
             key: &Key,
@@ -411,11 +404,9 @@ macro_rules! cipher_module {
         /// the encryption process. It is recommended that this be set to `None`, which will cause
         /// alkali to randomly generate a nonce for the message. If you specify a custom nonce, it
         /// is vital the nonce is never used to encrypt more than one message under the same key:
-        /// Nonce reuse could result in an attacker recovering the secret key. Nonces are not
-        /// secret, but will need to be communicated to the decrypting party for them to be able to
-        /// decrypt the message. This function will return the nonce used for the encryption of this
-        /// message.
-        ///
+        /// Nonce reuse destroys the security of the scheme. Nonces are not secret, but will need to
+        /// be communicated to the decrypting party for them to be able to decrypt the message. This
+        /// function will return the nonce used for the encryption of this message.
         ///
         /// The encrypted ciphertext will be written to `output`. The ciphertext will be the same
         /// length as `message`, so `output` must be of sufficient size to store at least this many
@@ -443,10 +434,9 @@ macro_rules! cipher_module {
                 return Err(CipherError::MessageTooLong.into());
             }
 
-            let nonce = if let Some(&n) = nonce {
-                n
-            } else {
-                generate_nonce()?
+            let nonce = match nonce {
+                Some(&n) => n,
+                None => generate_nonce()?,
             };
 
             let mut mac = [0u8; MAC_LENGTH];
@@ -487,9 +477,10 @@ macro_rules! cipher_module {
         /// writing the result to `output`.
         ///
         /// `ciphertext` should be the ciphertext to decrypt, and `mac` the [`MAC`] generated when
-        /// encrypting the ciphertext in detached mode with [`encrypt_detached`]. `nonce` should be
-        /// the [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) which was used to encrypt
-        /// the message.
+        /// encrypting the ciphertext in detached mode with [`encrypt_detached`]. `key` should be
+        /// the [`Key`] to use to decrypt the message. `nonce` should be the
+        /// [nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) which was used to encrypt the
+        /// message.
         ///
         /// The decrypted plaintext will be written to `output`. The plaintext will be the same
         /// length as `ciphertext`, so `output` must be of sufficient size to store at least this
@@ -499,7 +490,6 @@ macro_rules! cipher_module {
         /// Decryption will fail if message authentication fails. If decryption is successful, the
         /// plaintext is written to `output`, and the length of the plaintext will be returned (this
         /// will always be `ciphertext.len()` bytes).
-        /// be returned.
         pub fn decrypt_detached(
             ciphertext: &[u8],
             mac: &MAC,

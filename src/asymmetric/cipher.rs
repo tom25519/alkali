@@ -135,11 +135,7 @@
 //! let session_key = sender_keypair.session_key(&receiver_pub).unwrap();
 //! // Use the session key to encrypt the message, rather than the keypair.
 //! let mut ciphertext = vec![0u8; MESSAGE.as_bytes().len() + cipher::MAC_LENGTH];
-//! // Here, we'll generate a random nonce ourselves rather than letting alkali randomly generate
-//! // one for us. It is vital that a given nonce is never reused with the same key, so it is best
-//! // to randomly generate a nonce for every message.
-//! let nonce = cipher::generate_nonce().unwrap();
-//! session_key.encrypt(MESSAGE.as_bytes(), Some(&nonce), &mut ciphertext).unwrap();
+//! let (_, nonce) = session_key.encrypt(MESSAGE.as_bytes(), None, &mut ciphertext).unwrap();
 //!
 //!
 //! // ...
@@ -548,10 +544,10 @@ macro_rules! cipher_module {
             /// use in the encryption process. It is recommended that this be set to `None`, which
             /// will cause alkali to randomly generate a nonce for the message. If you specify a
             /// custom nonce, it is vital the nonce is never used to encrypt more than one message
-            /// under the same key: Nonce reuse could result in an attacker recovering the secret
-            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
-            /// for them to be able to decrypt the message. This function will return the nonce used
-            /// for the encryption of this message.
+            /// under the same key: Nonce reuse destroys the security of the scheme. Nonces are not
+            /// secret, but will need to be communicated to the decrypting party for them to be able
+            /// to decrypt the message. This function will return the nonce used for the encryption
+            /// of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be
             /// [`MAC_LENGTH`] bytes longer than `message`, so `output` must be of sufficient size
@@ -583,10 +579,9 @@ macro_rules! cipher_module {
                     return Err(CipherError::MessageTooLong.into());
                 }
 
-                let nonce = if let Some(&n) = nonce {
-                    n
-                } else {
-                    generate_nonce()?
+                let nonce = match nonce {
+                    Some(&n) => n,
+                    None => generate_nonce()?,
                 };
 
                 let encrypt_result = unsafe {
@@ -708,10 +703,10 @@ macro_rules! cipher_module {
             /// use in the encryption process. It is recommended that this be set to `None`, which
             /// will cause alkali to randomly generate a nonce for the message. If you specify a
             /// custom nonce, it is vital the nonce is never used to encrypt more than one message
-            /// under the same key: Nonce reuse could result in an attacker recovering the secret
-            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
-            /// for them to be able to decrypt the message. This function will return the nonce used
-            /// for the encryption of this message.
+            /// under the same key: Nonce reuse destroys the security of the scheme. Nonces are not
+            /// secret, but will need to be communicated to the decrypting party for them to be able
+            /// to decrypt the message. This function will return the nonce used for the encryption
+            /// of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be the
             /// same length as `message`, so `output` must be of sufficient size to store at least
@@ -741,10 +736,9 @@ macro_rules! cipher_module {
                     return Err(CipherError::MessageTooLong.into());
                 }
 
-                let nonce = if let Some(&n) = nonce {
-                    n
-                } else {
-                    generate_nonce()?
+                let nonce = match nonce {
+                    Some(&n) => n,
+                    None => generate_nonce()?,
                 };
 
                 let mut mac = [0u8; MAC_LENGTH];
@@ -870,10 +864,10 @@ macro_rules! cipher_module {
             /// use in the encryption process. It is recommended that this be set to `None`, which
             /// will cause alkali to randomly generate a nonce for the message. If you specify a
             /// custom nonce, it is vital the nonce is never used to encrypt more than one message
-            /// under the same key: Nonce reuse could result in an attacker recovering the secret
-            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
-            /// for them to be able to decrypt the message. This function will return the nonce used
-            /// for the encryption of this message.
+            /// under the same key: Nonce reuse destroys the security of the scheme. Nonces are not
+            /// secret, but will need to be communicated to the decrypting party for them to be able
+            /// to decrypt the message. This function will return the nonce used for the encryption
+            /// of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be
             /// [`MAC_LENGTH`] bytes longer than `message`, so `output` must be of sufficient size
@@ -904,10 +898,9 @@ macro_rules! cipher_module {
                     return Err(CipherError::MessageTooLong.into());
                 }
 
-                let nonce = if let Some(&n) = nonce {
-                    n
-                } else {
-                    generate_nonce()?
+                let nonce = match nonce {
+                    Some(&n) => n,
+                    None => generate_nonce()?,
                 };
 
                 let encrypt_result = unsafe {
@@ -1019,10 +1012,10 @@ macro_rules! cipher_module {
             /// use in the encryption process. It is recommended that this be set to `None`, which
             /// will cause alkali to randomly generate a nonce for the message. If you specify a
             /// custom nonce, it is vital the nonce is never used to encrypt more than one message
-            /// under the same key: Nonce reuse could result in an attacker recovering the secret
-            /// key. Nonces are not secret, but will need to be communicated to the decrypting party
-            /// for them to be able to decrypt the message. This function will return the nonce used
-            /// for the encryption of this message.
+            /// under the same key: Nonce reuse destroys the security of the scheme. Nonces are not
+            /// secret, but will need to be communicated to the decrypting party for them to be able
+            /// to decrypt the message. This function will return the nonce used for the encryption
+            /// of this message.
             ///
             /// The encrypted ciphertext will be written to `output`. The ciphertext will be the
             /// same length as `message`, so `output` must be of sufficient size to store at least
@@ -1051,10 +1044,9 @@ macro_rules! cipher_module {
                     return Err(CipherError::MessageTooLong.into());
                 }
 
-                let nonce = if let Some(&n) = nonce {
-                    n
-                } else {
-                    generate_nonce()?
+                let nonce = match nonce {
+                    Some(&n) => n,
+                    None => generate_nonce()?,
                 };
 
                 let mut mac = [0u8; MAC_LENGTH];
@@ -1168,8 +1160,7 @@ macro_rules! cipher_module {
         /// random nonce for every message we wish to encrypt, and the chances of reusing a nonce
         /// are essentially zero.
         ///
-        /// Returns a nonce generated using a Cryptographically Secure Pseudo-Random Number
-        /// Generator, or a [`crate::AlkaliError`] if an error occurred.
+        /// Returns a random nonce, or a [`crate::AlkaliError`] if an error occurred.
         pub fn generate_nonce() -> Result<Nonce, AlkaliError> {
             let mut nonce = [0; NONCE_LENGTH];
             random::fill_random(&mut nonce)?;

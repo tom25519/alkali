@@ -25,7 +25,9 @@ rand = "0.8"
 rpassword = "5.0"
 
 [features]
+aead_chacha20 = []
+aes = []
 alloc = []
-hazmat = ["onetimeauth", "sha2"]
+hazmat = ["aead_chacha20", "onetimeauth", "sha2"]
 onetimeauth = []
 sha2 = []

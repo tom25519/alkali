@@ -369,11 +369,11 @@ pub mod blake2b {
         ///
         /// If the key is intended to be a secret value, it must be at least [`KEY_LENGTH_MIN`]
         /// bytes. It is recommended that secret keys be at least [`KEY_LENGTH_DEFAULT`] bytes, and
-        /// the [`Key`] type is this length for this reason. <!-- TODO: uncomment after cleaning up
-        /// mem module. If you want to use a secret key of a custom length, you may wish to use the
-        /// [`crate::mem`] module to define a custom key type stored in protected memory. --> Keys
-        /// shorter than [`KEY_LENGTH_MIN`] are not suitable for secret values, but may be useful to
-        /// produce different hashes across different application domains.
+        /// the [`Key`] type is this length for this reason. If you want to use a secret key of a
+        /// custom length, you may wish to use the [`crate::mem`] module to define a custom key type
+        /// stored in protected memory. Keys shorter than [`KEY_LENGTH_MIN`] are not suitable for
+        /// secret values, but may be useful to produce different hashes across different
+        /// application domains.
         pub fn new_keyed(output_len: usize, key: &[u8]) -> Result<Self, AlkaliError> {
             if key.len() > KEY_LENGTH_MAX {
                 return Err(GenericHashError::KeyLengthInvalid.into());

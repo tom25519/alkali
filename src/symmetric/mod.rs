@@ -1,5 +1,6 @@
 //! Symmetric (secret-key) cryptographic operations.
 
+pub mod aead;
 pub mod auth;
 pub mod cipher;
 pub mod cipher_stream;

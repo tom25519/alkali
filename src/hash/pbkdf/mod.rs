@@ -107,10 +107,8 @@
 //! application. See [the section on this subject](#choosing-memory-and-operations-limits).
 //!
 //! Passwords should ideally be immediately erased from memory when they are no longer required for
-//! hash calculation/key derivation. You can use the [zeroize](https://crates.io/crates/zeroize)
-//! crate to do this very simply, or use the [hard](https://crates.io/crates/hard) crate if you
-//! want to make use of the other memory hardening utilties from Sodium. <!-- TODO: Update when the
-//! mem module has been cleaned up -->
+//! hash calculation/key derivation. The utilities from the [`crate::mem`] module are useful for
+//! storing such values safely in memory, and erasing them when no longer in use.
 //!
 //! A common, but dangerous, mistake is to verify the correctness of a password by generating the
 //! hash again yourself, and naively comparing the newly calculated hash with the stored hash. This
@@ -635,8 +633,9 @@ macro_rules! pbkdf_module {
         /// [`verify_password`] function is also provided to verify a password matches a specific
         /// hash in [constant time](https://en.wikipedia.org/wiki/Timing_attack).
         ///
-        /// <!-- TODO: Add section on securing memory where keys are stored w/ mem module when
-        /// cleaned up -->
+        /// Storing secret values in memory, such as the derived key, can be fraught with issues.
+        /// You may wish to use the utilities from the [`crate::mem`] module to securely store
+        /// the derived key in memr, and erase it when it is no longer needed.
         pub fn derive_key(
             password: &[u8],
             salt: &Salt,
@@ -778,8 +777,9 @@ macro_rules! pbkdf_module {
         /// [`verify_password`] function is also provided to verify a password matches a specific
         /// hash in [constant time](https://en.wikipedia.org/wiki/Timing_attack).
         ///
-        /// <!-- TODO: Add section on securing memory where keys are stored w/ mem module when
-        /// cleaned up -->
+        /// Storing secret values in memory, such as the derived key, can be fraught with issues.
+        /// You may wish to use the utilities from the [`crate::mem`] module to securely store
+        /// the derived key in memr, and erase it when it is no longer needed.
         pub fn derive_key(
             password: &[u8],
             salt: &Salt,

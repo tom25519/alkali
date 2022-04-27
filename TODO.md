@@ -1,5 +1,5 @@
 APIs to implement:
-* [ ] `crypto_aead`
+* [x] `crypto_aead`
 * [x] `crypto_auth`
 * [x] `crypto_box`
 * [x] `crypto_box_seal`
@@ -20,3 +20,6 @@ APIs to implement:
 * [x] `sodium_memcmp`
 * [x] `sodium_is_zero`
 * [x] padding
+* [ ] curve25519 finite field arithmetic
+* [ ] ed25519 finite field arithmetic
+* [ ] ristretto255 finite field arithmetic
