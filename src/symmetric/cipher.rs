@@ -772,6 +772,8 @@ pub mod xsalsa20poly1305 {
 
 /// The [XChaCha20](https://cr.yp.to/chacha.html) cipher with a
 /// [Poly1305](https://en.wikipedia.org/wiki/Poly1305) MAC.
+#[cfg(not(feature = "minimal"))]
+#[cfg_attr(doc_cfg, doc(cfg(not(feature = "minimal"))))]
 pub mod xchacha20poly1305 {
     use libsodium_sys as sodium;
 

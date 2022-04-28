@@ -69,10 +69,10 @@ use thiserror::Error;
 #[cfg(feature = "aes")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "aes")))]
 pub mod aes256gcm;
-#[cfg(feature = "aead_chacha20")]
+#[cfg(feature = "aead-chacha20")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
 pub mod chacha20poly1305;
-#[cfg(feature = "aead_chacha20")]
+#[cfg(feature = "aead-chacha20")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
 pub mod chacha20poly1305_ietf;
 pub mod xchacha20poly1305_ietf;

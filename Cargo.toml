@@ -10,7 +10,7 @@ keywords = ["cryptography", "libsodium", "nacl", "sodium"]
 categories = ["api-bindings", "cryptography"]
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["aes", "alloc", "hazmat"]
 rustdoc-args = ["--cfg", "doc_cfg"]
 
 [dependencies]
@@ -25,9 +25,13 @@ rand = "0.8"
 rpassword = "5.0"
 
 [features]
-aead_chacha20 = []
+aead-chacha20 = []
 aes = []
 alloc = []
-hazmat = ["aead_chacha20", "onetimeauth", "sha2"]
+fetch-latest = ["libsodium-sys-stable/fetch-latest"]
+hazmat = ["aead-chacha20", "onetimeauth", "sha2"]
+minimal = ["libsodium-sys-stable/minimal"]
 onetimeauth = []
+optimized = ["libsodium-sys-stable/optimized"]
 sha2 = []
+use-pkg-config = ["libsodium-sys-stable/use-pkg-config"]

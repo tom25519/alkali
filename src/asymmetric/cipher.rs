@@ -1674,6 +1674,8 @@ pub mod curve25519xsalsa20poly1305 {
 /// over Curve25519) to establish a shared secret key for encryption/decryption. The
 /// [XChaCha20](https://cr.yp.to/chacha.html) cipher is used to perform encryption/decryption, with
 /// the [Poly1305](https://en.wikipedia.org/wiki/Poly1305) MAC for authentication.
+#[cfg(not(feature = "minimal"))]
+#[cfg_attr(doc_cfg, doc(cfg(not(feature = "minimal"))))]
 pub mod curve25519xchacha20poly1305 {
     use libsodium_sys as sodium;
 

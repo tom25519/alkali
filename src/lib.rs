@@ -39,6 +39,32 @@
 //! | [`symmetric::cipher_stream`] | [`crypto_secretstream`](https://doc.libsodium.org/secret-key_cryptography/secretstream) | Encrypt a sequence of messages, or an arbitrarily-long data stream |
 //! | [`random`] | [`randombytes`](https://doc.libsodium.org/generating_random_data) | Generate unpredictable data suitable for cryptographic use |
 //!
+//! # Build Options
+//! On non-Windows platforms, by default Sodium is compiled from source as part of alkali's build
+//! process (on Windows, pre-compiled binaries are downloaded). This build process can be customised
+//! via features and environment variables.
+//!
+//! * Sodium is compiled from source included in the [libsodium-sys-stable
+//!   crate](https://github.com/jedisct1/libsodium-sys-stable), maintained by Frank Denis, who is
+//!   also the maintainer of Sodium itself. This source may be out of date compared to the latest
+//!   stable release, so alternatively, the library can be built from the latest stable downloaded
+//!   from [download.libsodium.org](https://download.libsodium.org/) by enabling the `fetch-latest`
+//!   feature.
+//! * Deprecated and uncommon APIs can be disabled using the `minimal` feature. Any APIs or
+//!   algorithms which will be disabled by enabling minimal builds will be marked as such in this
+//!   documentation.
+//! * Sodium can be built with optimisations for the current platform by enabling the `optimized`
+//!   feature.
+//! * [Position-Independent Code](https://en.wikipedia.org/wiki/Position-independent_code) can be
+//!   disabled for Sodium's build by setting the `SODIUM_DISABLE_PIE` environment variable.
+//!
+//! Rather than building Sodium from source, you can also link to an existing shared/static build of
+//! Sodium on your system. The `use-pkg-config` feature will use
+//! [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) to find libsodium.
+//! Alternatively, you can set the `SODIUM_LIB_DIR` environment variable to specify the location of
+//! libsodium on your system. Sodium will be statically linked by default, but you can set
+//! `SODIUM_SHARED` to dynamically link the library.
+//!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
 //! custom allocator from Sodium to manage their memory. They can be used like standard array/slice

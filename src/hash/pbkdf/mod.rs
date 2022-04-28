@@ -185,6 +185,8 @@ use thiserror::Error;
 
 pub mod argon2i;
 pub mod argon2id;
+#[cfg(not(feature = "minimal"))]
+#[cfg_attr(doc_cfg, doc(cfg(not(feature = "minimal"))))]
 pub mod scrypt;
 
 pub use argon2id::*;

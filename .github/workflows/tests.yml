@@ -35,8 +35,8 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - run: ${{ matrix.deps }}
         if: ${{ matrix.deps }}
-      - run: cargo test --all-features --target ${{ matrix.target }}
-      - run: cargo test --release --all-features --target ${{ matrix.target }}
+      - run: cargo test --features "aes alloc hazmat" --target ${{ matrix.target }}
+      - run: cargo test --release --features "aes alloc hazmat optimized" --target ${{ matrix.target }}
 
   docs:
     runs-on: ubuntu-latest
@@ -47,6 +47,6 @@ jobs:
         toolchain: nightly
         override: true
     - uses: Swatinem/rust-cache@v1
-    - run: cargo doc --all-features
+    - run: cargo doc --features "aes alloc hazmat"
       env:
         RUSTDOCFLAGS: '-Drustdoc::broken_intra_doc_links --cfg doc_cfg'

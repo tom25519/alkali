@@ -274,6 +274,8 @@ pub mod siphash24 {
 }
 
 /// The SipHashX-2-4 hash function (extended output size).
+#[cfg(not(feature = "minimal"))]
+#[cfg_attr(doc_cfg, doc(cfg(not(feature = "minimal"))))]
 pub mod siphashx24 {
     use libsodium_sys as sodium;
 
