@@ -55,7 +55,7 @@
 //! Common to all of the algorithms here is that nonces must *never* be used more than once with the
 //! same key. For XChaCha20, random nonces can be used for every message, but for the other
 //! algorithms, the nonce size is too short for the possibility of nonce reuse to be negligible.
-//! Again, read the indiviual algorithms' documentation for more details.
+//! Again, read the individual algorithms' documentation for more details.
 //!
 //! If many trusted parties have access to the secret key, there is no way to prove which of them
 //! sent a given message without additional information.
@@ -77,6 +77,7 @@ pub mod chacha20poly1305;
 pub mod chacha20poly1305_ietf;
 pub mod xchacha20poly1305_ietf;
 
+/// Error type returned if something went wrong in the `symmetric::aead` module.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum AEADError {
     /// The output buffer is too short to store the ciphertext/plaintext which would result from

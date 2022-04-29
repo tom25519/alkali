@@ -205,6 +205,7 @@ pub enum AlkaliError {
     #[error("PRNG error")]
     RandomError(#[from] random::RandomError),
 
+    /// An error occurred in the [`symmetric::aead`] module.
     #[error("symmetric AEAD error")]
     AEADError(#[from] symmetric::aead::AEADError),
 
@@ -225,6 +226,12 @@ pub enum AlkaliError {
     #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
     #[error("one-time authentication error")]
     OneTimeAuthError(#[from] symmetric::one_time_auth::OneTimeAuthError),
+
+    /// An error occurred in the [`symmetric::stream`] module.
+    #[cfg(feature = "stream")]
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
+    #[error("stream cipher error")]
+    StreamCipherError(#[from] symmetric::stream::StreamCipherError),
 }
 
 /// Used where Sodium returns an error which we didn't expect.

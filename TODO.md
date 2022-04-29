@@ -13,7 +13,7 @@ APIs to implement:
 * [x] `crypto_secretstream`
 * [x] `crypto_shorthash`
 * [x] `crypto_sign`
-* [ ] `crypto_stream`
+* [x] `crypto_stream`
 * [x] `randombytes`
 * [x] hex/base64 conversion
 * [x] `sodium_memzero`

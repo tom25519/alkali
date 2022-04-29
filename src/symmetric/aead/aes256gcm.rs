@@ -52,6 +52,8 @@
 //! * Nonces ([`Nonce`]) are not sensitive
 //! * Additional data should not be secret
 
+// TODO: Support precalculated key expansion (beforenm/afternm)
+
 use super::AEADError;
 use crate::{assert_not_err, mem, require_init, util, AlkaliError};
 use libsodium_sys as sodium;
