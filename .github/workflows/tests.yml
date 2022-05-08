@@ -59,10 +59,11 @@ jobs:
           toolchain: stable
           override: true
       - uses: Swatinem/rust-cache@v1
+      - run: cargo test
       - run: cargo test --features "aes hazmat"
-      - run: cargo test --features "aes hazmat optimized"
+      - run: cargo test --release --features "aes hazmat optimized"
       - run: cargo test --features "aes hazmat minimal"
-      - run: cargo test --features "aes hazmat minimal optimized"
+      - run: cargo test --release --features "aes hazmat minimal optimized"
 
   docs:
     runs-on: ubuntu-latest

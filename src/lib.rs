@@ -193,6 +193,8 @@ pub enum AlkaliError {
     SignError(#[from] asymmetric::sign::SignError),
 
     /// An error occurred in the [`curve`] module.
+    #[cfg(feature = "curve")]
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
     #[error("elliptic curve error")]
     CurveError(#[from] curve::CurveError),
 

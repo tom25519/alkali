@@ -106,6 +106,7 @@ pub enum AEADError {
     AESUnavailable,
 }
 
+#[allow(unused_macros)]
 macro_rules! chacha_aead_module {
     (
         $key_len:expr,      // crypto_aead_KEYBYTES
@@ -587,6 +588,7 @@ macro_rules! chacha_aead_module {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use chacha_aead_module;
 
 #[allow(unused_macros)]
