@@ -401,6 +401,82 @@ macro_rules! stream_module {
     };
 }
 
+macro_rules! expansion_function {
+    (
+        $counter_len:expr,
+        $const_len:expr,
+        $expand_outlen:expr,
+        $(#[$metadata:meta])*
+        $expand:path,
+    ) => {
+        /// The length of the input to [`expand`], normally a combined nonce + counter, in bytes.
+        pub const EXPAND_NONCE_LENGTH: usize = $counter_len as usize;
+
+        /// The length of custom constants for [`expand`], in bytes.
+        pub const EXPAND_CONSTANTS_LENGTH: usize = $const_len as usize;
+
+        /// The length of the output of [`expand`], in bytes.
+        pub const EXPANDED_LENGTH: usize = $expand_outlen as usize;
+
+        /// The input to [`expand`].
+        ///
+        /// Generally, the first half of this is the nonce being used for encryption, and the second
+        /// half is the block counter.
+        pub type ExpandNonce = [u8; EXPAND_NONCE_LENGTH];
+
+        /// Custom constants to use for [`expand`].
+        pub type ExpandConstants = [u8; EXPAND_CONSTANTS_LENGTH];
+
+        $(#[$metadata])*
+        pub fn expand(
+            key: &Key,
+            n: &ExpandNonce,
+            constants: Option<&ExpandConstants>,
+            output: &mut [u8],
+        ) -> Result<(), AlkaliError> {
+            require_init()?;
+
+            if output.len() < EXPANDED_LENGTH {
+                return Err(StreamCipherError::OutputInsufficient.into());
+            }
+
+            let const_ptr = match constants {
+                Some(c) => c.as_ptr(),
+                None => std::ptr::null(),
+            };
+
+            let expand_result = unsafe {
+                // SAFETY: The first argument to this function is the destination to which the
+                // expanded output will be written. The output will be `$expand_outlen` bytes long.
+                // We verify above that `output` is at least this many bytes in length, so `output`
+                // is valid for writes of the required length. The next argument is the input to the
+                // expansion function, used to expand the key. We define the `ExpandNonce` type to
+                // be `$counter_len` bytes long, the length of the input to the expansion function,
+                // so `n` is valid for reads of the required length. The next argument is the key to
+                // expand. The key type should be defined to be `crypto_stream_KEYBYTES` for this
+                // cipher, which is equal to `crypto_core_KEYBYTES`, the length of a key for this
+                // algorithm, so `key` is valid for reads of the required length. The next argument
+                // is a pointer to custom constants to use in the expansion function. If constants
+                // are provided, we pass a pointer to `c`, which is defined to be
+                // `crypto_core_CONSTBYTES`, the expected size of custom constants for this
+                // algorithm, so `c` is valid for reads of the required length. Otherwise, we pass a
+                // null pointer, in which case Sodium is documented to ignore this argument. The
+                // `Key::inner` method simply returns an immutable pointer to the struct's backing
+                // memory.
+                $expand(
+                    output.as_mut_ptr(),
+                    n.as_ptr(),
+                    key.inner() as *const libc::c_uchar,
+                    const_ptr,
+                )
+            };
+            assert_not_err!(expand_result, stringify!($expand));
+
+            Ok(())
+        }
+    };
+}
+
 #[allow(unused_macros)]
 macro_rules! stream_tests {
     ( $( {
@@ -482,6 +558,32 @@ macro_rules! stream_tests {
                 let mut ks = vec![0; $msg.len()];
                 keystream(&key, &$nonce, &mut ks)?;
                 assert_eq!(&ks, &$keystream);
+            )*
+
+            Ok(())
+        }
+    };
+}
+
+#[allow(unused_macros)]
+macro_rules! expansion_tests {
+    ( $( {
+        key: $key:expr,
+        n: $n:expr,
+        c: $c:expr,
+        out: $out:expr,
+    }, )* ) => {
+        use super::{expand, EXPANDED_LENGTH};
+
+        #[test]
+        fn expand_vectors() -> Result<(), AlkaliError> {
+            let mut key = Key::new_empty()?;
+            let mut out = [0; EXPANDED_LENGTH];
+
+            $(
+                key.copy_from_slice(&$key);
+                expand(&key, &$n, Some(&$c), &mut out)?;
+                assert_eq!(out, $out);
             )*
 
             Ok(())
@@ -638,6 +740,46 @@ pub mod salsa20 {
         u64,
     }
 
+    expansion_function! {
+        sodium::crypto_core_salsa20_INPUTBYTES,
+        sodium::crypto_core_salsa20_CONSTBYTES,
+        sodium::crypto_core_salsa20_OUTPUTBYTES,
+        /// The raw Salsa20 expansion function.
+        ///
+        /// This is the expansion function detailed in section 9 of the [Salsa20
+        /// specification](https://cr.yp.to/snuffle/spec.pdf). Section 10 of the specification
+        /// describes how Salsa20 encryption works: We begin by setting a 8-byte counter to zero,
+        /// then expand the key into a 64-byte value using the concatenated nonce + counter as input
+        /// to the expansion function. This expanded output is then XORed with the first 64 bytes of
+        /// the plaintext. The counter is then incremented, the key is expanded again, and the next
+        /// 64 bytes of plaintext are XORed with the output. This process is repeated until the
+        /// entire plaintext is encrypted.
+        ///
+        /// `key` should be the [`Key`] to expand. `n` should be the nonce to use to expand the key
+        /// for this block: In Salsa20 encryption, the first 8 bytes are set to the nonce to use for
+        /// encryption, and the second 8 bytes are an 8-byte, little endian counter, incremented for
+        /// every block.
+        ///
+        /// `constants` can be used to specify custom constants for the Salsa20 expansion: These are
+        /// the sigma values from the specification. By default, these are set to `[101, 120, 112,
+        /// 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]`, the ASCII representation of
+        /// `expand 32-byte k`. There is generally no reason to change these values.
+        ///
+        /// The expanded output will be written to `output`, which must be at least
+        /// [`EXPANDED_LENGTH`] bytes. The number of bytes written will always be
+        /// [`EXPANDED_LENGTH`] bytes.
+        ///
+        /// # Security Considerations
+        /// This is a very low-level function, and generally does not need to be used directly.
+        ///
+        /// The expanded output of this function is a portion of the keystream for the provided key,
+        /// so it should be treated as sensitive data.
+        ///
+        /// The [`ExpandNonce`] input to this function should *never* be used more than once with
+        /// the same key.
+        sodium::crypto_core_salsa20,
+    }
+
     #[cfg(test)]
     mod tests {
         stream_tests! [
@@ -688,6 +830,39 @@ pub mod salsa20 {
                 nonce:  [0x69, 0x69, 0x6e, 0xe9, 0x55, 0xb6, 0x2b, 0x73],
                 c:      [],
                 ks:     [],
+            },
+        ];
+
+        expansion_tests! [
+            {
+                key:    [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+                         0x0d, 0x0e, 0x0f, 0x10, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xd0,
+                         0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8],
+                n:      [0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70,
+                         0x71, 0x72, 0x73, 0x74],
+                c:      [0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                         0x74, 0x65, 0x20, 0x6b],
+                out:    [0x45, 0x25, 0x44, 0x27, 0x29, 0x0f, 0x6b, 0xc1, 0xff, 0x8b, 0x7a, 0x06,
+                         0xaa, 0xe9, 0xd9, 0x62, 0x59, 0x90, 0xb6, 0x6a, 0x15, 0x33, 0xc8, 0x41,
+                         0xef, 0x31, 0xde, 0x22, 0xd7, 0x72, 0x28, 0x7e, 0x68, 0xc5, 0x07, 0xe1,
+                         0xc5, 0x99, 0x1f, 0x02, 0x66, 0x4e, 0x4c, 0xb0, 0x54, 0xf5, 0xf6, 0xb8,
+                         0xb1, 0xa0, 0x85, 0x82, 0x06, 0x48, 0x95, 0x77, 0xc0, 0xc3, 0x84, 0xec,
+                         0xea, 0x67, 0xf6, 0x4a],
+            },
+            {
+                key:    [0xee, 0x30, 0x4f, 0xca, 0x27, 0x00, 0x8d, 0x8c, 0x12, 0x6f, 0x90, 0x02,
+                         0x79, 0x01, 0xd8, 0x0f, 0x7f, 0x1d, 0x8b, 0x8d, 0xc9, 0x36, 0xcf, 0x3b,
+                         0x9f, 0x81, 0x96, 0x92, 0x82, 0x7e, 0x57, 0x77],
+                n:      [0x81, 0x91, 0x8e, 0xf2, 0xa5, 0xe0, 0xda, 0x9b, 0x3e, 0x90, 0x60, 0x52,
+                         0x1e, 0x4b, 0xb3, 0x52],
+                c:      [0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                         0x74, 0x65, 0x20, 0x6b],
+                out:    [0x21, 0x94, 0xa0, 0x5d, 0x9a, 0x52, 0x01, 0x48, 0x57, 0xe8, 0x20, 0x61,
+                         0xf9, 0x06, 0x5f, 0x61, 0xfd, 0xe9, 0x8a, 0xba, 0x75, 0x90, 0xe1, 0x73,
+                         0x6b, 0x2d, 0xa0, 0xdb, 0x4a, 0xfa, 0xf9, 0x2f, 0x1f, 0x1d, 0x1b, 0xe2,
+                         0xf6, 0x6c, 0x5a, 0x20, 0xa7, 0x11, 0x1d, 0x21, 0x78, 0x2b, 0x1e, 0xdd,
+                         0x2f, 0x54, 0x9a, 0x9a, 0x3d, 0xe6, 0xe7, 0x62, 0xb8, 0x5e, 0x21, 0x24,
+                         0xa5, 0x1a, 0xc9, 0xb0],
             },
         ];
     }
@@ -745,6 +920,47 @@ pub mod salsa2012 {
         sodium::crypto_stream_salsa2012_xor,
     }
 
+    expansion_function! {
+        sodium::crypto_core_salsa2012_INPUTBYTES,
+        sodium::crypto_core_salsa2012_CONSTBYTES,
+        sodium::crypto_core_salsa2012_OUTPUTBYTES,
+        /// The raw Salsa20/12 expansion function.
+        ///
+        /// This is the expansion function detailed in section 9 of the [Salsa20
+        /// specification](https://cr.yp.to/snuffle/spec.pdf), but reduced to 12 rounds, rather than
+        /// the usual 20. Section 10 of the specification describes how Salsa20/12 encryption works:
+        /// We begin by setting a 8-byte counter to zero, then expand the key into a 64-byte value
+        /// using the concatenated nonce + counter as input to the expansion function. This expanded
+        /// output is then XORed with the first 64 bytes of the plaintext. The counter is then
+        /// incremented, the key is expanded again, and the next 64 bytes of plaintext are XORed
+        /// with the output. This process is repeated until the entire plaintext is encrypted.
+        ///
+        /// `key` should be the [`Key`] to expand. `n` should be the nonce to use to expand the key
+        /// for this block: In Salsa20/12 encryption, the first 8 bytes are set to the nonce to use
+        /// for encryption, and the second 8 bytes are an 8-byte, little endian counter, incremented
+        /// for every block.
+        ///
+        /// `constants` can be used to specify custom constants for the Salsa20/12 expansion: These
+        /// are the sigma values from the specification. By default, these are set to `[101, 120,
+        /// 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]`, the ASCII
+        /// representation of `expand 32-byte k`. There is generally no reason to change these
+        /// values.
+        ///
+        /// The expanded output will be written to `output`, which must be at least
+        /// [`EXPANDED_LENGTH`] bytes. The number of bytes written will always be
+        /// [`EXPANDED_LENGTH`] bytes.
+        ///
+        /// # Security Considerations
+        /// This is a very low-level function, and generally does not need to be used directly.
+        ///
+        /// The expanded output of this function is a portion of the keystream for the provided key,
+        /// so it should be treated as sensitive data.
+        ///
+        /// The [`ExpandNonce`] input to this function should *never* be used more than once with
+        /// the same key.
+        sodium::crypto_core_salsa2012,
+    }
+
     #[cfg(test)]
     mod tests {
         stream_tests![
@@ -795,6 +1011,39 @@ pub mod salsa2012 {
                 nonce:  [0x69, 0x69, 0x6e, 0xe9, 0x55, 0xb6, 0x2b, 0x73],
                 c:      [],
                 ks:     [],
+            },
+        ];
+
+        expansion_tests! [
+            {
+                key:    [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+                         0x0d, 0x0e, 0x0f, 0x10, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xd0,
+                         0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8],
+                n:      [0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70,
+                         0x71, 0x72, 0x73, 0x74],
+                c:      [0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                         0x74, 0x65, 0x20, 0x6b],
+                out:    [0xc2, 0x84, 0xfe, 0x2e, 0xfa, 0xde, 0x74, 0x85, 0x20, 0xa9, 0xce, 0x85,
+                         0x3a, 0x4e, 0xb8, 0x85, 0x89, 0x70, 0x62, 0x10, 0xee, 0x85, 0x26, 0x3b,
+                         0x76, 0x13, 0x36, 0x97, 0x8c, 0xb0, 0xdf, 0xf1, 0x54, 0x49, 0xfb, 0x3d,
+                         0xcb, 0xdd, 0xea, 0x0f, 0x6c, 0x6f, 0x31, 0x5f, 0x80, 0x77, 0x16, 0x70,
+                         0x5c, 0xf7, 0x3d, 0x94, 0xd4, 0x87, 0x14, 0x3b, 0x02, 0xa4, 0x48, 0x81,
+                         0xa5, 0xa4, 0x61, 0x79],
+            },
+            {
+                key:    [0xee, 0x30, 0x4f, 0xca, 0x27, 0x00, 0x8d, 0x8c, 0x12, 0x6f, 0x90, 0x02,
+                         0x79, 0x01, 0xd8, 0x0f, 0x7f, 0x1d, 0x8b, 0x8d, 0xc9, 0x36, 0xcf, 0x3b,
+                         0x9f, 0x81, 0x96, 0x92, 0x82, 0x7e, 0x57, 0x77],
+                n:      [0x81, 0x91, 0x8e, 0xf2, 0xa5, 0xe0, 0xda, 0x9b, 0x3e, 0x90, 0x60, 0x52,
+                         0x1e, 0x4b, 0xb3, 0x52],
+                c:      [0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                         0x74, 0x65, 0x20, 0x6b],
+                out:    [0x37, 0x75, 0x1a, 0xb7, 0x13, 0x93, 0xe1, 0xa9, 0xcc, 0xff, 0xf0, 0x45,
+                         0x33, 0xda, 0xec, 0xa1, 0x89, 0x7d, 0xe3, 0xa6, 0x91, 0xef, 0x36, 0x36,
+                         0x79, 0x77, 0x08, 0x50, 0xb3, 0x4a, 0x22, 0x93, 0xde, 0x3f, 0x06, 0x34,
+                         0xd8, 0x92, 0xa2, 0xf3, 0xdf, 0x33, 0x05, 0x61, 0xfa, 0x01, 0x0a, 0xe2,
+                         0xc4, 0x71, 0x91, 0x6b, 0x31, 0x8d, 0x2d, 0x56, 0x47, 0x58, 0x43, 0x8b,
+                         0x81, 0xbf, 0xed, 0xba],
             },
         ];
     }
@@ -852,6 +1101,47 @@ pub mod salsa208 {
         sodium::crypto_stream_salsa208_xor,
     }
 
+    expansion_function! {
+        sodium::crypto_core_salsa208_INPUTBYTES,
+        sodium::crypto_core_salsa208_CONSTBYTES,
+        sodium::crypto_core_salsa208_OUTPUTBYTES,
+        /// The raw Salsa20/8 expansion function.
+        ///
+        /// This is the expansion function detailed in section 9 of the [Salsa20
+        /// specification](https://cr.yp.to/snuffle/spec.pdf), but reduced to 8 rounds, rather than
+        /// the usual 20. Section 10 of the specification describes how Salsa20/8 encryption works:
+        /// We begin by setting a 8-byte counter to zero, then expand the key into a 64-byte value
+        /// using the concatenated nonce + counter as input to the expansion function. This expanded
+        /// output is then XORed with the first 64 bytes of the plaintext. The counter is then
+        /// incremented, the key is expanded again, and the next 64 bytes of plaintext are XORed
+        /// with the output. This process is repeated until the entire plaintext is encrypted.
+        ///
+        /// `key` should be the [`Key`] to expand. `n` should be the nonce to use to expand the key
+        /// for this block: In Salsa20/8 encryption, the first 8 bytes are set to the nonce to use
+        /// for encryption, and the second 8 bytes are an 8-byte, little endian counter, incremented
+        /// for every block.
+        ///
+        /// `constants` can be used to specify custom constants for the Salsa20/8 expansion: These
+        /// are the sigma values from the specification. By default, these are set to `[101, 120,
+        /// 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]`, the ASCII
+        /// representation of `expand 32-byte k`. There is generally no reason to change these
+        /// values.
+        ///
+        /// The expanded output will be written to `output`, which must be at least
+        /// [`EXPANDED_LENGTH`] bytes. The number of bytes written will always be
+        /// [`EXPANDED_LENGTH`] bytes.
+        ///
+        /// # Security Considerations
+        /// This is a very low-level function, and generally does not need to be used directly.
+        ///
+        /// The expanded output of this function is a portion of the keystream for the provided key,
+        /// so it should be treated as sensitive data.
+        ///
+        /// The [`ExpandNonce`] input to this function should *never* be used more than once with
+        /// the same key.
+        sodium::crypto_core_salsa208,
+    }
+
     #[cfg(test)]
     mod tests {
         stream_tests![
@@ -902,6 +1192,39 @@ pub mod salsa208 {
                 nonce:  [0x69, 0x69, 0x6e, 0xe9, 0x55, 0xb6, 0x2b, 0x73],
                 c:      [],
                 ks:     [],
+            },
+        ];
+
+        expansion_tests! [
+            {
+                key:    [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+                         0x0d, 0x0e, 0x0f, 0x10, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xd0,
+                         0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8],
+                n:      [0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70,
+                         0x71, 0x72, 0x73, 0x74],
+                c:      [0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                         0x74, 0x65, 0x20, 0x6b],
+                out:    [0xd9, 0x4c, 0xef, 0xce, 0xbb, 0x50, 0xfc, 0x9d, 0x69, 0xf6, 0x71, 0xa5,
+                         0x45, 0x30, 0x5a, 0xf0, 0xd5, 0x5b, 0x1e, 0xc3, 0x0b, 0x78, 0xef, 0xbd,
+                         0xff, 0x93, 0xb7, 0x21, 0xd4, 0x91, 0x16, 0xcc, 0xa5, 0x73, 0x30, 0x08,
+                         0x70, 0x72, 0xa7, 0x50, 0xaf, 0xad, 0x8e, 0xb5, 0x95, 0xff, 0x56, 0x8b,
+                         0x42, 0xce, 0x2e, 0x8f, 0x86, 0x66, 0x6c, 0x45, 0xd7, 0x5b, 0x02, 0xc7,
+                         0x69, 0xba, 0xfd, 0x21],
+            },
+            {
+                key:    [0xee, 0x30, 0x4f, 0xca, 0x27, 0x00, 0x8d, 0x8c, 0x12, 0x6f, 0x90, 0x02,
+                         0x79, 0x01, 0xd8, 0x0f, 0x7f, 0x1d, 0x8b, 0x8d, 0xc9, 0x36, 0xcf, 0x3b,
+                         0x9f, 0x81, 0x96, 0x92, 0x82, 0x7e, 0x57, 0x77],
+                n:      [0x81, 0x91, 0x8e, 0xf2, 0xa5, 0xe0, 0xda, 0x9b, 0x3e, 0x90, 0x60, 0x52,
+                         0x1e, 0x4b, 0xb3, 0x52],
+                c:      [0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                         0x74, 0x65, 0x20, 0x6b],
+                out:    [0x6e, 0x51, 0xcf, 0x23, 0xe4, 0xa0, 0x8d, 0xb5, 0x96, 0x33, 0xd2, 0x0d,
+                         0xd1, 0x50, 0x55, 0xed, 0x3d, 0xcb, 0x9c, 0x35, 0x18, 0x5c, 0x3d, 0x12,
+                         0xc6, 0xd4, 0x29, 0x53, 0x3a, 0xc9, 0x50, 0x99, 0x43, 0xbc, 0x3b, 0x6c,
+                         0xf2, 0x45, 0x16, 0x4d, 0xef, 0xcd, 0x81, 0xfe, 0x02, 0xf7, 0x99, 0x0e,
+                         0xed, 0x89, 0x78, 0x7d, 0xec, 0x3d, 0xd8, 0x0e, 0xc3, 0x1d, 0xc1, 0xb5,
+                         0x5b, 0xfd, 0xe5, 0x27],
             },
         ];
     }
