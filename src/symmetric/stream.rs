@@ -410,19 +410,19 @@ macro_rules! expansion_function {
         $expand:path,
     ) => {
         /// The length of the input to [`expand`], normally a combined nonce + counter, in bytes.
-        pub const EXPAND_NONCE_LENGTH: usize = $counter_len as usize;
+        pub const EXPAND_INPUT_LENGTH: usize = $counter_len as usize;
 
         /// The length of custom constants for [`expand`], in bytes.
         pub const EXPAND_CONSTANTS_LENGTH: usize = $const_len as usize;
 
         /// The length of the output of [`expand`], in bytes.
-        pub const EXPANDED_LENGTH: usize = $expand_outlen as usize;
+        pub const EXPAND_OUTPUT_LENGTH: usize = $expand_outlen as usize;
 
         /// The input to [`expand`].
         ///
         /// Generally, the first half of this is the nonce being used for encryption, and the second
         /// half is the block counter.
-        pub type ExpandNonce = [u8; EXPAND_NONCE_LENGTH];
+        pub type ExpandInput = [u8; EXPAND_INPUT_LENGTH];
 
         /// Custom constants to use for [`expand`].
         pub type ExpandConstants = [u8; EXPAND_CONSTANTS_LENGTH];
@@ -430,13 +430,13 @@ macro_rules! expansion_function {
         $(#[$metadata])*
         pub fn expand(
             key: &Key,
-            n: &ExpandNonce,
+            n: &ExpandInput,
             constants: Option<&ExpandConstants>,
             output: &mut [u8],
         ) -> Result<(), AlkaliError> {
             require_init()?;
 
-            if output.len() < EXPANDED_LENGTH {
+            if output.len() < EXPAND_OUTPUT_LENGTH {
                 return Err(StreamCipherError::OutputInsufficient.into());
             }
 
@@ -450,7 +450,7 @@ macro_rules! expansion_function {
                 // expanded output will be written. The output will be `$expand_outlen` bytes long.
                 // We verify above that `output` is at least this many bytes in length, so `output`
                 // is valid for writes of the required length. The next argument is the input to the
-                // expansion function, used to expand the key. We define the `ExpandNonce` type to
+                // expansion function, used to expand the key. We define the `ExpandInput` type to
                 // be `$counter_len` bytes long, the length of the input to the expansion function,
                 // so `n` is valid for reads of the required length. The next argument is the key to
                 // expand. The key type should be defined to be `crypto_stream_KEYBYTES` for this
@@ -573,12 +573,12 @@ macro_rules! expansion_tests {
         c: $c:expr,
         out: $out:expr,
     }, )* ) => {
-        use super::{expand, EXPANDED_LENGTH};
+        use super::{expand, EXPAND_OUTPUT_LENGTH};
 
         #[test]
         fn expand_vectors() -> Result<(), AlkaliError> {
             let mut key = Key::new_empty()?;
-            let mut out = [0; EXPANDED_LENGTH];
+            let mut out = [0; EXPAND_OUTPUT_LENGTH];
 
             $(
                 key.copy_from_slice(&$key);
@@ -634,8 +634,100 @@ pub mod xsalsa20 {
         u64,
     }
 
+    /// The length of a nonce for the [`hsalsa20`] function, in bytes.
+    pub const HSALSA_NONCE_LENGTH: usize = sodium::crypto_core_hsalsa20_INPUTBYTES as usize;
+
+    /// The length of custom constants for [`hsalsa20`], in bytes.
+    pub const HSALSA_CONSTANTS_LENGTH: usize = sodium::crypto_core_hsalsa20_CONSTBYTES as usize;
+
+    /// The length of the output of [`hsalsa20`], in bytes.
+    pub const HSALSA_OUTPUT_LENGTH: usize = sodium::crypto_core_hsalsa20_OUTPUTBYTES as usize;
+
+    /// A nonce for [`hsalsa20`].
+    pub type HSalsaNonce = [u8; HSALSA_NONCE_LENGTH];
+
+    /// Custom constants to use for [`hsalsa20`].
+    pub type HSalsaConstants = [u8; HSALSA_CONSTANTS_LENGTH];
+
+    /// The raw HSalsa20 function.
+    ///
+    /// This is the HSalsa20 function detailed in section 2 of the paper [*Extending the Salsa20
+    /// nonce*](https://cr.yp.to/snuffle/xsalsa-20081128.pdf). HSalsa20 is a key component used in
+    /// the definition of XSalsa20: XSalsa20 takes a 32-byte key and 24-byte nonce as input. The key
+    /// and first 16 bytes of the nonce are used as input for HSalsa20, which outputs a 32-byte
+    /// value. This 32-byte value is then used as the key for the Salsa20 cipher, with the final 8
+    /// bytes of the XSalsa20 nonce as the nonce for the Salsa20 cipher.
+    ///
+    /// `key` should be the [`Key`] for XSalsa20. `nonce` should be the [`HSalsaNonce`], generally
+    /// the first 16 bytes of a full XSalsa20 [`Nonce`].
+    ///
+    /// `constants` can be used to specify custom constants for the HSalsa20 function: These are the
+    /// sigma values from the original Salsa20 definition. By default, these are set to `[101, 120,
+    /// 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]`, the ASCII representation of
+    /// `expand 32-byte k`. There is generally no reason to change these values.
+    ///
+    /// The output of this function will be written to `output`, which must be at least
+    /// [`HSALSA_OUTPUT_LENGTH`] bytes long. The number of bytes written will always be
+    /// [`HSALSA_OUTPUT_LENGTH`] bytes.
+    ///
+    /// # Security Considerations
+    /// This is a very low-level function, and generally does not need to be used directly.
+    ///
+    /// The output of this function is the key which will be used for Salsa20 as part of XSalsa20's
+    /// encryption calculation, so it should be treated as sensitive data.
+    ///
+    /// The [`HSalsaNonce`] input to this function should *never* be used more than once with the
+    /// same key.
+    pub fn hsalsa20(
+        key: &Key,
+        nonce: &HSalsaNonce,
+        constants: Option<&HSalsaConstants>,
+        output: &mut [u8],
+    ) -> Result<(), AlkaliError> {
+        require_init()?;
+
+        if output.len() < HSALSA_OUTPUT_LENGTH {
+            return Err(StreamCipherError::OutputInsufficient.into());
+        }
+
+        let const_ptr = match constants {
+            Some(c) => c.as_ptr(),
+            None => std::ptr::null(),
+        };
+
+        let hsalsa_result = unsafe {
+            // SAFETY: The first argument to this function is the destination to which the output
+            // will be written. The output will be `crypto_core_hsalsa20_OUTPUTBYTES` bytes long. We
+            // verify above that `output` is at least this many bytes in length, so `output` is
+            // valid for writes of the required length. The next argument is the nonce for HSalsa20,
+            // which should be `crypto_core_hsalsa20_NONCEBYTES` bytes long. We define `HSalsaNonce`
+            // to be this length, so `nonce` is valid for reads of the required size. The next
+            // argument is the key to expand. The key type is defined to be
+            // `crypto_stream_xsalsa20_KEYBYTES`, which is equal to `crypto_core_hsalsa20_KEYBYTES`,
+            // the length of a key for HSalsa20, so `key` is valid for reads of the required length.
+            // The final argument is a pointer to custom constants to use with HSalsa20. If
+            // constants are provided, we pass a pointer to `c`, which is defined to be
+            // `crypto_core_hsalsa20_CONSTBYTES`, the expected size of custom constants for this
+            // algorithm, so `c` is valid for reads of the required length. Otherwise, we pass a
+            // null pointer, in which case Sodium is documented to ignore this argument. The
+            // `Key::inner` method simply returns an immutable pointer to the struct's backing
+            // memory.
+            sodium::crypto_core_hsalsa20(
+                output.as_mut_ptr(),
+                nonce.as_ptr(),
+                key.inner() as *const libc::c_uchar,
+                const_ptr,
+            )
+        };
+        assert_not_err!(hsalsa_result, "crypto_core_hsalsa20");
+
+        Ok(())
+    }
+
     #[cfg(test)]
     mod tests {
+        use super::{hsalsa20, HSALSA_OUTPUT_LENGTH};
+
         stream_tests! [
             {
                 msg:    [0xbe, 0x07, 0x5f, 0xc5, 0x3c, 0x81, 0xf2, 0xd5, 0xcf, 0x14, 0x13, 0x16,
@@ -688,6 +780,60 @@ pub mod xsalsa20 {
                 ks:     [],
             },
         ];
+
+        #[test]
+        fn hsalsa_vectors() -> Result<(), AlkaliError> {
+            let vectors = [
+                (
+                    [
+                        0x4a, 0x5d, 0x9d, 0x5b, 0xa4, 0xce, 0x2d, 0xe1, 0x72, 0x8e, 0x3b, 0xf4,
+                        0x80, 0x35, 0x0f, 0x25, 0xe0, 0x7e, 0x21, 0xc9, 0x47, 0xd1, 0x9e, 0x33,
+                        0x76, 0xf0, 0x9b, 0x3c, 0x1e, 0x16, 0x17, 0x42,
+                    ],
+                    [0; 16],
+                    [
+                        0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                        0x74, 0x65, 0x20, 0x6b,
+                    ],
+                    [
+                        0x1b, 0x27, 0x55, 0x64, 0x73, 0xe9, 0x85, 0xd4, 0x62, 0xcd, 0x51, 0x19,
+                        0x7a, 0x9a, 0x46, 0xc7, 0x60, 0x09, 0x54, 0x9e, 0xac, 0x64, 0x74, 0xf2,
+                        0x06, 0xc4, 0xee, 0x08, 0x44, 0xf6, 0x83, 0x89,
+                    ],
+                ),
+                (
+                    [
+                        0x1b, 0x27, 0x55, 0x64, 0x73, 0xe9, 0x85, 0xd4, 0x62, 0xcd, 0x51, 0x19,
+                        0x7a, 0x9a, 0x46, 0xc7, 0x60, 0x09, 0x54, 0x9e, 0xac, 0x64, 0x74, 0xf2,
+                        0x06, 0xc4, 0xee, 0x08, 0x44, 0xf6, 0x83, 0x89,
+                    ],
+                    [
+                        0x69, 0x69, 0x6e, 0xe9, 0x55, 0xb6, 0x2b, 0x73, 0xcd, 0x62, 0xbd, 0xa8,
+                        0x75, 0xfc, 0x73, 0xd6,
+                    ],
+                    [
+                        0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                        0x74, 0x65, 0x20, 0x6b,
+                    ],
+                    [
+                        0xdc, 0x90, 0x8d, 0xda, 0x0b, 0x93, 0x44, 0xa9, 0x53, 0x62, 0x9b, 0x73,
+                        0x38, 0x20, 0x77, 0x88, 0x80, 0xf3, 0xce, 0xb4, 0x21, 0xbb, 0x61, 0xb9,
+                        0x1c, 0xbd, 0x4c, 0x3e, 0x66, 0x25, 0x6c, 0xe4,
+                    ],
+                ),
+            ];
+
+            let mut output = [0u8; HSALSA_OUTPUT_LENGTH];
+            let mut k = Key::new_empty()?;
+
+            for (key, nonce, constants, expected) in vectors {
+                k.copy_from_slice(&key[..]);
+                hsalsa20(&k, &nonce, Some(&constants), &mut output)?;
+                assert_eq!(output, expected);
+            }
+
+            Ok(())
+        }
     }
 }
 
@@ -755,7 +901,7 @@ pub mod salsa20 {
         /// 64 bytes of plaintext are XORed with the output. This process is repeated until the
         /// entire plaintext is encrypted.
         ///
-        /// `key` should be the [`Key`] to expand. `n` should be the nonce to use to expand the key
+        /// `key` should be the [`Key`] to expand. `n` should be the input to use to expand the key
         /// for this block: In Salsa20 encryption, the first 8 bytes are set to the nonce to use for
         /// encryption, and the second 8 bytes are an 8-byte, little endian counter, incremented for
         /// every block.
@@ -766,8 +912,8 @@ pub mod salsa20 {
         /// `expand 32-byte k`. There is generally no reason to change these values.
         ///
         /// The expanded output will be written to `output`, which must be at least
-        /// [`EXPANDED_LENGTH`] bytes. The number of bytes written will always be
-        /// [`EXPANDED_LENGTH`] bytes.
+        /// [`EXPAND_OUTPUT_LENGTH`] bytes. The number of bytes written will always be
+        /// [`EXPAND_OUTPUT_LENGTH`] bytes.
         ///
         /// # Security Considerations
         /// This is a very low-level function, and generally does not need to be used directly.
@@ -775,7 +921,7 @@ pub mod salsa20 {
         /// The expanded output of this function is a portion of the keystream for the provided key,
         /// so it should be treated as sensitive data.
         ///
-        /// The [`ExpandNonce`] input to this function should *never* be used more than once with
+        /// The [`ExpandInput`] input to this function should *never* be used more than once with
         /// the same key.
         sodium::crypto_core_salsa20,
     }
@@ -935,7 +1081,7 @@ pub mod salsa2012 {
         /// incremented, the key is expanded again, and the next 64 bytes of plaintext are XORed
         /// with the output. This process is repeated until the entire plaintext is encrypted.
         ///
-        /// `key` should be the [`Key`] to expand. `n` should be the nonce to use to expand the key
+        /// `key` should be the [`Key`] to expand. `n` should be the input to use to expand the key
         /// for this block: In Salsa20/12 encryption, the first 8 bytes are set to the nonce to use
         /// for encryption, and the second 8 bytes are an 8-byte, little endian counter, incremented
         /// for every block.
@@ -947,8 +1093,8 @@ pub mod salsa2012 {
         /// values.
         ///
         /// The expanded output will be written to `output`, which must be at least
-        /// [`EXPANDED_LENGTH`] bytes. The number of bytes written will always be
-        /// [`EXPANDED_LENGTH`] bytes.
+        /// [`EXPAND_OUTPUT_LENGTH`] bytes. The number of bytes written will always be
+        /// [`EXPAND_OUTPUT_LENGTH`] bytes.
         ///
         /// # Security Considerations
         /// This is a very low-level function, and generally does not need to be used directly.
@@ -956,7 +1102,7 @@ pub mod salsa2012 {
         /// The expanded output of this function is a portion of the keystream for the provided key,
         /// so it should be treated as sensitive data.
         ///
-        /// The [`ExpandNonce`] input to this function should *never* be used more than once with
+        /// The [`ExpandInput`] input to this function should *never* be used more than once with
         /// the same key.
         sodium::crypto_core_salsa2012,
     }
@@ -1116,7 +1262,7 @@ pub mod salsa208 {
         /// incremented, the key is expanded again, and the next 64 bytes of plaintext are XORed
         /// with the output. This process is repeated until the entire plaintext is encrypted.
         ///
-        /// `key` should be the [`Key`] to expand. `n` should be the nonce to use to expand the key
+        /// `key` should be the [`Key`] to expand. `n` should be the input to use to expand the key
         /// for this block: In Salsa20/8 encryption, the first 8 bytes are set to the nonce to use
         /// for encryption, and the second 8 bytes are an 8-byte, little endian counter, incremented
         /// for every block.
@@ -1128,8 +1274,8 @@ pub mod salsa208 {
         /// values.
         ///
         /// The expanded output will be written to `output`, which must be at least
-        /// [`EXPANDED_LENGTH`] bytes. The number of bytes written will always be
-        /// [`EXPANDED_LENGTH`] bytes.
+        /// [`EXPAND_OUTPUT_LENGTH`] bytes. The number of bytes written will always be
+        /// [`EXPAND_OUTPUT_LENGTH`] bytes.
         ///
         /// # Security Considerations
         /// This is a very low-level function, and generally does not need to be used directly.
@@ -1137,7 +1283,7 @@ pub mod salsa208 {
         /// The expanded output of this function is a portion of the keystream for the provided key,
         /// so it should be treated as sensitive data.
         ///
-        /// The [`ExpandNonce`] input to this function should *never* be used more than once with
+        /// The [`ExpandInput`] input to this function should *never* be used more than once with
         /// the same key.
         sodium::crypto_core_salsa208,
     }
@@ -1275,8 +1421,101 @@ pub mod xchacha20 {
         u64,
     }
 
+    /// The length of a nonce for the [`hchacha20`] function, in bytes.
+    pub const HCHACHA_NONCE_LENGTH: usize = sodium::crypto_core_hchacha20_INPUTBYTES as usize;
+
+    /// The length of custom constants for [`hchacha20`], in bytes.
+    pub const HCHACHA_CONSTANTS_LENGTH: usize = sodium::crypto_core_hchacha20_CONSTBYTES as usize;
+
+    /// The length of the output of [`hchacha20`], in bytes.
+    pub const HCHACHA_OUTPUT_LENGTH: usize = sodium::crypto_core_hchacha20_OUTPUTBYTES as usize;
+
+    /// A nonce for [`hchacha20`].
+    pub type HChaChaNonce = [u8; HCHACHA_NONCE_LENGTH];
+
+    /// Custom constants to use for [`hchacha20`].
+    pub type HChaChaConstants = [u8; HCHACHA_CONSTANTS_LENGTH];
+
+    /// The raw HChaCha20 function.
+    ///
+    /// This is the HChaCha20 function detailed in section 2.2 of the [XChaCha IETF
+    /// Draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha-03#section-2.2).
+    /// HChaCha20 is a key component used in the definition of XChaCha20: XChaCha20 takes a 32-byte
+    /// key and 24-byte nonce as input. The key and first 16 bytes of the nonce are used as input
+    /// for HChaCha20, which outputs a 32-byte value. This 32-byte value is then used as the key for
+    /// the ChaCha20 cipher, with the final 8 bytes of the XChaCha20 nonce as the nonce for the
+    /// ChaCha20 cipher.
+    ///
+    /// `key` should be the [`Key`] for XChaCha20. `nonce` should be the [`HChaChaNonce`], generally
+    /// the first 16 bytes of a full XChaCha20 [`Nonce`].
+    ///
+    /// `constants` can be used to specify custom constants for the HChaCha20 function: These are
+    /// the sigma values from the original Salsa20 definition. By default, these are set to `[101,
+    /// 120, 112, 97, 110, 100, 32, 51, 50, 45, 98, 121, 116, 101, 32, 107]`, the ASCII
+    /// representation of `expand 32-byte k`. There is generally no reason to change these values.
+    ///
+    /// The output of this function will be written to `output`, which must be at least
+    /// [`HCHACHA_OUTPUT_LENGTH`] bytes long. The number of bytes written will always be
+    /// [`HCHACHA_OUTPUT_LENGTH`] bytes.
+    ///
+    /// # Security Considerations
+    /// This is a very low-level function, and generally does not need to be used directly.
+    ///
+    /// The output of this function is the key which will be used for ChaCha20 as part of
+    /// XChaCha20's encryption calculation, so it should be treated as sensitive data.
+    ///
+    /// The [`HChaChaNonce`] input to this function should *never* be used more than once with the
+    /// same key.
+    pub fn hchacha20(
+        key: &Key,
+        nonce: &HChaChaNonce,
+        constants: Option<&HChaChaConstants>,
+        output: &mut [u8],
+    ) -> Result<(), AlkaliError> {
+        require_init()?;
+
+        if output.len() < HCHACHA_OUTPUT_LENGTH {
+            return Err(StreamCipherError::OutputInsufficient.into());
+        }
+
+        let const_ptr = match constants {
+            Some(c) => c.as_ptr(),
+            None => std::ptr::null(),
+        };
+
+        let hchacha_result = unsafe {
+            // SAFETY: The first argument to this function is the destination to which the output
+            // will be written. The output will be `crypto_core_hchacha20_OUTPUTBYTES` bytes long.
+            // We verify above that `output` is at least this many bytes in length, so `output` is
+            // valid for writes of the required length. The next argument is the nonce for
+            // HChaCha20, which should be `crypto_core_hchacha20_NONCEBYTES` bytes long. We define
+            // `HChaChaNonce` to be this length, so `nonce` is valid for reads of the required size.
+            // The next argument is the key to expand. The key type is defined to be
+            // `crypto_stream_xchacha20_KEYBYTES`, which is equal to
+            // `crypto_core_hchacha20_KEYBYTES`, the length of a key for HChaCha20, so `key` is
+            // valid for reads of the required length. The final argument is a pointer to custom
+            // constants to use with HChaCha20. If constants are provided, we pass a pointer to `c`,
+            // which is defined to be `crypto_core_hchacha20_CONSTBYTES`, the expected size of
+            // custom constants for this algorithm, so `c` is valid for reads of the required
+            // length. Otherwise, we pass a null pointer, in which case Sodium is documented to
+            // ignore this argument. The `Key::inner` method simply returns an immutable pointer to
+            // the struct's backing memory.
+            sodium::crypto_core_hchacha20(
+                output.as_mut_ptr(),
+                nonce.as_ptr(),
+                key.inner() as *const libc::c_uchar,
+                const_ptr,
+            )
+        };
+        assert_not_err!(hchacha_result, "crypto_core_hchacha20");
+
+        Ok(())
+    }
+
     #[cfg(test)]
     mod tests {
+        use super::{hchacha20, HCHACHA_OUTPUT_LENGTH};
+
         stream_tests! [
             {
                 msg:    [0xbe, 0x07, 0x5f, 0xc5, 0x3c, 0x81, 0xf2, 0xd5, 0xcf, 0x14, 0x13, 0x16,
@@ -1329,6 +1568,60 @@ pub mod xchacha20 {
                 ks:     [],
             },
         ];
+
+        #[test]
+        fn hchacha_vectors() -> Result<(), AlkaliError> {
+            let vectors = [
+                (
+                    [
+                        0x4a, 0x5d, 0x9d, 0x5b, 0xa4, 0xce, 0x2d, 0xe1, 0x72, 0x8e, 0x3b, 0xf4,
+                        0x80, 0x35, 0x0f, 0x25, 0xe0, 0x7e, 0x21, 0xc9, 0x47, 0xd1, 0x9e, 0x33,
+                        0x76, 0xf0, 0x9b, 0x3c, 0x1e, 0x16, 0x17, 0x42,
+                    ],
+                    [0; 16],
+                    [
+                        0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                        0x74, 0x65, 0x20, 0x6b,
+                    ],
+                    [
+                        0x8e, 0x47, 0xca, 0x37, 0x6b, 0xdc, 0x7e, 0x59, 0xd2, 0xce, 0xd8, 0x10,
+                        0x7c, 0xeb, 0x2c, 0x27, 0xf4, 0xa8, 0x0e, 0x85, 0x75, 0xf9, 0x96, 0xba,
+                        0xff, 0xb1, 0xa8, 0x69, 0xff, 0xcd, 0x51, 0x79,
+                    ],
+                ),
+                (
+                    [
+                        0x1b, 0x27, 0x55, 0x64, 0x73, 0xe9, 0x85, 0xd4, 0x62, 0xcd, 0x51, 0x19,
+                        0x7a, 0x9a, 0x46, 0xc7, 0x60, 0x09, 0x54, 0x9e, 0xac, 0x64, 0x74, 0xf2,
+                        0x06, 0xc4, 0xee, 0x08, 0x44, 0xf6, 0x83, 0x89,
+                    ],
+                    [
+                        0x69, 0x69, 0x6e, 0xe9, 0x55, 0xb6, 0x2b, 0x73, 0xcd, 0x62, 0xbd, 0xa8,
+                        0x75, 0xfc, 0x73, 0xd6,
+                    ],
+                    [
+                        0x65, 0x78, 0x70, 0x61, 0x6e, 0x64, 0x20, 0x33, 0x32, 0x2d, 0x62, 0x79,
+                        0x74, 0x65, 0x20, 0x6b,
+                    ],
+                    [
+                        0x28, 0x8b, 0xe1, 0xc7, 0x7c, 0x2f, 0xf6, 0x8b, 0x94, 0x45, 0x7d, 0x50,
+                        0xa3, 0x13, 0x5f, 0xd9, 0x63, 0x9d, 0x70, 0x9d, 0xd9, 0x7d, 0x1d, 0x1c,
+                        0xd7, 0x6c, 0x17, 0x84, 0x4c, 0xba, 0xb0, 0x6d,
+                    ],
+                ),
+            ];
+
+            let mut output = [0u8; HCHACHA_OUTPUT_LENGTH];
+            let mut k = Key::new_empty()?;
+
+            for (key, nonce, constants, expected) in vectors {
+                k.copy_from_slice(&key[..]);
+                hchacha20(&k, &nonce, Some(&constants), &mut output)?;
+                assert_eq!(output, expected);
+            }
+
+            Ok(())
+        }
     }
 }
 
