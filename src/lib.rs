@@ -115,6 +115,9 @@ use libsodium_sys as sodium;
 use thiserror::Error;
 
 pub mod asymmetric;
+#[cfg(feature = "curve")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
+pub mod curve;
 pub mod encode;
 pub mod hash;
 pub mod mem;
@@ -188,6 +191,10 @@ pub enum AlkaliError {
     /// An error occurred in the [`asymmetric::sign`] module.
     #[error("signing error")]
     SignError(#[from] asymmetric::sign::SignError),
+
+    /// An error occurred in the [`curve`] module.
+    #[error("elliptic curve error")]
+    CurveError(#[from] curve::CurveError),
 
     /// An error occurred in the [`hash::generic`] module.
     #[error("hash error")]

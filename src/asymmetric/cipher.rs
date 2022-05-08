@@ -290,11 +290,12 @@ macro_rules! cipher_module {
             /// A private key forms one half of a [`Keypair`], together with a [`PublicKey`].
             ///
             /// There are no technical constraints on the contents of a private key for this API.
-            /// Keys are [clamped](https://www.jcraige.com/an-explainer-on-ed25519-clamping) at time
-            /// of usage, not when generated, so a private key can just be any random sequence of
-            /// bytes. However, private keys should be indistinguishable from random noise, and
-            /// should really be generated randomly using [`Keypair::generate`]. If you need to
-            /// derive a private key deterministically, use [`Keypair::from_seed`].
+            /// Keys are
+            /// [clamped](https://neilmadden.blog/2020/05/28/whats-the-curve25519-clamping-all-about/)
+            /// at time of usage, not when generated, so a private key can just be any random
+            /// sequence of bytes. However, private keys should be indistinguishable from random
+            /// noise, and should really be generated randomly using [`Keypair::generate`]. If you
+            /// need to derive a private key deterministically, use [`Keypair::from_seed`].
             ///
             /// A private key is secret, and as such, should not ever be made public.
             ///

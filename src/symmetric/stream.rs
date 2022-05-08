@@ -37,21 +37,22 @@
 //! * [ChaCha20](chacha20#security-considerations)
 //! * [ChaCha20-IETF](chacha20_ietf#security-considerations)
 //!
+//! Common to all of the algorithms here is that nonces must *never* be used more than once with the
+//! same key. For the extended nonce algorithms (XSalsa20 and XChaCha20), random nonces can be used
+//! for every message, but for the other algorithms, the nonce size is too short for the possibility
+//! of nonce reuse to be negligible. Again, read the individual algorithms' documentation for more
+//! details.
+//!
+//! This API exposes *unauthenticated* stream ciphers, low-level constructions which are not suited
+//! to general use. There is no way to detect if an attacker has modified the ciphertext. You should
+//! generally prefer to use the authenticated [`symmetric::cipher`](crate::symmetric::cipher)
+//! construction, unless you are using this API as part of a wider authenticated protocol.
+//!
+//! These algorithms expose the length of the plaintext. If this is undesirable, apply padding to
+//! the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
+//! decryption via [`util::unpad`](crate::util::unpad).
+
 use crate::AlkaliError;
-/// Common to all of the algorithms here is that nonces must *never* be used more than once with the
-/// same key. For the extended nonce algorithms (XSalsa20 and XChaCha20), random nonces can be used
-/// for every message, but for the other algorithms, the nonce size is too short for the possibility
-/// of nonce reuse to be negligible. Again, read the individual algorithms' documentation for more
-/// details.
-///
-/// This API exposes *unauthenticated* stream ciphers, low-level constructions which are not suited
-/// to general use. There is no way to detect if an attacker has modified the ciphertext. You should
-/// generally prefer to use the authenticated [`symmetric::cipher`](crate::symmetric::cipher)
-/// construction, unless you are using this API as part of a wider authenticated protocol.
-///
-/// These algorithms expose the length of the plaintext. If this is undesirable, apply padding to
-/// the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it following
-/// decryption via [`util::unpad`](crate::util::unpad).
 use thiserror::Error;
 
 /// Error type returned if something went wrong in the `symmetric::stream` module.

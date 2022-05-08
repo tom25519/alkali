@@ -50,6 +50,20 @@ jobs:
       - run: cargo test --features "aes alloc hazmat minimal"
       - run: cargo test --release --features "aes alloc hazmat minimal optimized"
 
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo test --features "aes hazmat"
+      - run: cargo test --features "aes hazmat optimized"
+      - run: cargo test --features "aes hazmat minimal"
+      - run: cargo test --features "aes hazmat minimal optimized"
+
   docs:
     runs-on: ubuntu-latest
     steps:
