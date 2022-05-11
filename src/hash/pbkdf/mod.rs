@@ -379,6 +379,8 @@ macro_rules! pbkdf_module_common {
         /// This function is not suitable for deriving keys for use with other cryptographic
         /// operations, and large parts of its output are predictable. You should instead use
         /// [`derive_key`], which only produces output suitable for use as key-data.
+        #[cfg(feature = "std")]
+        #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
         pub fn store_password(
             password: &str,
             ops_limit: usize,
@@ -457,6 +459,8 @@ macro_rules! pbkdf_module_common {
         ///
         /// This function will return `Ok(())` if `password` is equal to the password used to
         /// calculate `hash`, or a [`PasswordHashError`](super::PasswordHashError) otherwise.
+        #[cfg(feature = "std")]
+        #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
         pub fn verify_password(password: &str, hash: &str) -> Result<(), AlkaliError> {
             require_init()?;
 
@@ -503,6 +507,8 @@ macro_rules! pbkdf_module_common {
         /// appear to be in the correct format for this algorithm. In the latter two cases, after
         /// verifying the hash with the older limits/algorithm, you should store a new hash using
         /// the current operations/memory limits with this algorithm.
+        #[cfg(feature = "std")]
+        #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
         pub fn requires_rehash(
             hash: &str,
             ops_limit: usize,
@@ -855,9 +861,9 @@ macro_rules! kdf_tests {
         #[test]
         fn key_derivation_test_vectors() -> Result<(), $crate::AlkaliError> {
             $(
-                let mut actual_key = vec![0u8; $key.len()];
-                super::derive_key(&$pass, &$salt, $opslim, $memlim, &mut actual_key)?;
-                assert_eq!(&actual_key, &$key);
+                let mut actual_key = [0u8; 4096];
+                super::derive_key(&$pass, &$salt, $opslim, $memlim, &mut actual_key[..$key.len()])?;
+                assert_eq!(&actual_key[..$key.len()], &$key);
             )*
 
             Ok(())
@@ -867,7 +873,7 @@ macro_rules! kdf_tests {
         fn key_derivation_invalid_params() -> Result<(), $crate::AlkaliError> {
             let password = b"Correct Horse Battery Staple";
             let salt = super::generate_salt()?;
-            let mut key = vec![0; super::OUTPUT_LENGTH_MIN];
+            let mut key = [0; super::OUTPUT_LENGTH_MIN];
 
             assert!(super::derive_key(
                 password,
@@ -877,7 +883,7 @@ macro_rules! kdf_tests {
                 &mut key,
             ).is_ok());
 
-            let mut key = vec![0; super::OUTPUT_LENGTH_MIN - 1];
+            let mut key = [0; super::OUTPUT_LENGTH_MIN - 1];
             assert!(super::derive_key(
                 password,
                 &salt,
@@ -886,7 +892,7 @@ macro_rules! kdf_tests {
                 &mut key
             )
             .is_err());
-            let mut key = vec![0; super::OUTPUT_LENGTH_MIN];
+            let mut key = [0; super::OUTPUT_LENGTH_MIN];
 
             assert!(super::derive_key(
                 password,
@@ -922,6 +928,7 @@ macro_rules! verify_password_valid_tests {
         pass: $pass:expr,
         hash: $hash:expr,
     }, )* ) => {
+        #[cfg(feature = "std")]
         #[test]
         fn verify_password_valid_strings() {
             $(
@@ -942,6 +949,7 @@ macro_rules! verify_password_invalid_tests {
         pass: $pass:expr,
         hash: $hash:expr,
     }, )* ) => {
+        #[cfg(feature = "std")]
         #[test]
         fn verify_password_invalid_strings() {
             $(
@@ -958,6 +966,7 @@ pub(crate) use verify_password_invalid_tests;
 #[allow(unused_macros)]
 macro_rules! needs_rehash_tests {
     () => {
+        #[cfg(feature = "std")]
         #[test]
         fn needs_rehash() -> Result<(), $crate::AlkaliError> {
             use $crate::hash::pbkdf::RehashResult;

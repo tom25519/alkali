@@ -302,7 +302,7 @@ macro_rules! cipher_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; PRIVATE_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used
+            /// `[u8; PRIVATE_KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used
             /// like it is an `&[u8]`. This struct uses heap memory while in scope, allocated using
             /// Sodium's [secure memory utilities](https://doc.libsodium.org/memory_management).
             ///
@@ -325,7 +325,7 @@ macro_rules! cipher_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used
+            /// `[u8; SESSION_KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used
             /// like it is an `&[u8]`. This struct uses heap memory while in scope, allocated using
             /// Sodium's [secure memory utilities](https://doc.libsodium.org/memory_management).
             pub SessionKey(SESSION_KEY_LENGTH);
@@ -342,7 +342,7 @@ macro_rules! cipher_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used
+            /// `[u8; SESSION_KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used
             /// like it is an `&[u8]`. This struct uses heap memory while in scope, allocated using
             /// Sodium's [secure memory utilities](https://doc.libsodium.org/memory_management).
             pub Seed(KEY_SEED_LENGTH);
@@ -1452,6 +1452,8 @@ macro_rules! cipher_tests {
         fn test_vectors() -> Result<(), AlkaliError> {
             let mut priv_a = PrivateKey::new_empty()?;
             let mut priv_b = PrivateKey::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 priv_a.copy_from_slice(&$priv_a);
@@ -1460,15 +1462,13 @@ macro_rules! cipher_tests {
                 let b = Keypair::from_private_key(&priv_b)?;
 
                 let c_len = $msg.len() + MAC_LENGTH;
-                let mut c = vec![0; c_len];
                 let (l, _) = a.encrypt(&$msg, &b.public_key, Some(&$nonce), &mut c)?;
                 assert_eq!(l, c_len);
                 assert_eq!(&c[..MAC_LENGTH], &$mac[..]);
-                assert_eq!(&c[MAC_LENGTH..], &$c[..]);
+                assert_eq!(&c[MAC_LENGTH..c_len], &$c[..]);
 
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(b.decrypt(&c, &a.public_key, &$nonce, &mut m)?, $msg.len());
-                assert_eq!(&m, &$msg);
+                assert_eq!(b.decrypt(&c[..c_len], &a.public_key, &$nonce, &mut m)?, $msg.len());
+                assert_eq!(&m[..$msg.len()], &$msg);
             )*
 
             Ok(())
@@ -1478,6 +1478,8 @@ macro_rules! cipher_tests {
         fn test_vectors_detached() -> Result<(), AlkaliError> {
             let mut priv_a = PrivateKey::new_empty()?;
             let mut priv_b = PrivateKey::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 priv_a.copy_from_slice(&$priv_a);
@@ -1485,15 +1487,16 @@ macro_rules! cipher_tests {
                 let a = Keypair::from_private_key(&priv_a)?;
                 let b = Keypair::from_private_key(&priv_b)?;
 
-                let mut c = vec![0; $msg.len()];
                 let (l, _, mac) = a.encrypt_detached(&$msg, &b.public_key, Some(&$nonce), &mut c)?;
                 assert_eq!(l, $msg.len());
-                assert_eq!(&c, &$c);
+                assert_eq!(&c[..$msg.len()], &$c[..$msg.len()]);
                 assert_eq!(&mac, &$mac);
 
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(b.decrypt_detached(&c, &mac, &a.public_key, &$nonce, &mut m)?, m.len());
-                assert_eq!(&m, &$msg);
+                assert_eq!(
+                    b.decrypt_detached(&c[..$msg.len()], &mac, &a.public_key, &$nonce, &mut m)?,
+                    $msg.len()
+                );
+                assert_eq!(&m[..$msg.len()], &$msg);
             )*
 
             Ok(())
@@ -1503,6 +1506,8 @@ macro_rules! cipher_tests {
         fn test_vectors_precalculated() -> Result<(), AlkaliError> {
             let mut priv_a = PrivateKey::new_empty()?;
             let mut priv_b = PrivateKey::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 priv_a.copy_from_slice(&$priv_a);
@@ -1512,16 +1517,14 @@ macro_rules! cipher_tests {
 
                 let key = a.session_key(&b.public_key)?;
                 let c_len = $msg.len() + MAC_LENGTH;
-                let mut c = vec![0; c_len];
                 let (l, _) = key.encrypt(&$msg, Some(&$nonce), &mut c)?;
                 assert_eq!(l, c_len);
                 assert_eq!(&c[..MAC_LENGTH], &$mac);
-                assert_eq!(&c[MAC_LENGTH..], &$c);
+                assert_eq!(&c[MAC_LENGTH..c_len], &$c);
 
                 let key = b.session_key(&a.public_key)?;
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(key.decrypt(&c, &$nonce, &mut m)?, $msg.len());
-                assert_eq!(&m, &$msg);
+                assert_eq!(key.decrypt(&c[..c_len], &$nonce, &mut m)?, $msg.len());
+                assert_eq!(&m[..$msg.len()], &$msg);
             )*
 
             Ok(())
@@ -1531,6 +1534,8 @@ macro_rules! cipher_tests {
         fn test_vectors_detached_precalculated() -> Result<(), AlkaliError> {
             let mut priv_a = PrivateKey::new_empty()?;
             let mut priv_b = PrivateKey::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 priv_a.copy_from_slice(&$priv_a);
@@ -1539,15 +1544,16 @@ macro_rules! cipher_tests {
                 let b = Keypair::from_private_key(&priv_b)?;
 
                 let key = a.session_key(&b.public_key)?;
-                let mut c = vec![0; $msg.len()];
                 let (l, _, mac) = key.encrypt_detached(&$msg, Some(&$nonce), &mut c)?;
                 assert_eq!(l, $msg.len());
-                assert_eq!(&c, &$c);
+                assert_eq!(&c[..$msg.len()], &$c);
                 assert_eq!(&mac, &$mac);
 
                 let key = b.session_key(&a.public_key)?;
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(key.decrypt_detached(&c, &mac, &$nonce, &mut m)?, $msg.len());
+                assert_eq!(
+                    key.decrypt_detached(&c[..$msg.len()], &mac, &$nonce, &mut m)?, $msg.len()
+                );
+                assert_eq!(&m[..$msg.len()], &$msg[..]);
             )*
 
             Ok(())

@@ -1,6 +1,6 @@
 //! General utilities from Sodium.
 
-use crate::{assert_not_err, require_init, AlkaliError};
+use crate::{require_init, AlkaliError};
 use libsodium_sys as sodium;
 
 /// Treat `number` as a little-endian, unsigned integer, and increment its value by 1.
@@ -97,13 +97,13 @@ pub fn sub_le(number: &mut [u8], subtrahend: &[u8]) -> Result<(), AlkaliError> {
 /// This function may be used with nonces to prevent replay attacks.
 ///
 /// Returns:
-/// * [`std::cmp::Ordering::Less`] if `a` is less than `b`
-/// * [`std::cmp::Ordering::Equal`] if `a` equals `b`
-/// * [`std::cmp::Ordering::Greater`] if `a` is greater than `b`
+/// * [`core::cmp::Ordering::Less`] if `a` is less than `b`
+/// * [`core::cmp::Ordering::Equal`] if `a` equals `b`
+/// * [`core::cmp::Ordering::Greater`] if `a` is greater than `b`
 /// * An error if `a` and `b` are not the same length (in bytes)
 ///
 /// This comparison runs in constant time for a given length of `a` & `b`.
-pub fn compare_le(a: &[u8], b: &[u8]) -> Result<std::cmp::Ordering, AlkaliError> {
+pub fn compare_le(a: &[u8], b: &[u8]) -> Result<core::cmp::Ordering, AlkaliError> {
     require_init()?;
 
     if a.len() != b.len() {
@@ -119,9 +119,9 @@ pub fn compare_le(a: &[u8], b: &[u8]) -> Result<std::cmp::Ordering, AlkaliError>
     };
 
     match comparison {
-        -1 => Ok(std::cmp::Ordering::Less),
-        0 => Ok(std::cmp::Ordering::Equal),
-        1 => Ok(std::cmp::Ordering::Greater),
+        -1 => Ok(core::cmp::Ordering::Less),
+        0 => Ok(core::cmp::Ordering::Equal),
+        1 => Ok(core::cmp::Ordering::Greater),
         _ => unreachable!(),
     }
 }
@@ -146,6 +146,8 @@ pub fn compare_le(a: &[u8], b: &[u8]) -> Result<std::cmp::Ordering, AlkaliError>
 /// the encrypted message will *still* reveal which of the two messages was sent (the first message
 /// will be padded to 16 bytes, the second to 112). This example is obviously contrived, but you
 /// should ensure that your padding scheme is appropriate for your use case.
+#[cfg(feature = "std")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
     require_init()?;
 
@@ -179,7 +181,7 @@ pub fn pad(buf: &mut Vec<u8>, blocksize: usize) -> Result<(), AlkaliError> {
         )
     };
 
-    assert_not_err!(pad_result, "sodium_pad");
+    crate::assert_not_err!(pad_result, "sodium_pad");
 
     // Remove excess zeroes we added when resizing `buf` above
     buf.truncate(padded_len);
@@ -226,7 +228,7 @@ pub fn unpad(buf: &[u8], blocksize: usize) -> Result<&[u8], AlkaliError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{add_le, compare_le, increment_le, pad, sub_le, unpad};
+    use super::{add_le, compare_le, increment_le, sub_le};
     use crate::{mem, random, AlkaliError};
 
     #[test]
@@ -319,34 +321,44 @@ mod tests {
 
     #[test]
     fn add_equivalent_to_repeated_increment() -> Result<(), AlkaliError> {
-        let mut buf1 = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-        let mut buf_add = buf1.clone();
-        random::fill_random(&mut buf1)?;
-        let mut buf2 = buf1.clone();
+        let mut buf1 = [0u8; 1000];
+        let mut buf_add = [0u8; 1000];
+        let l = random::random_u32_in_range(0, 1000)? as usize;
+        random::fill_random(&mut buf1[..l])?;
+        let mut buf2 = [0u8; 1000];
+        buf2.copy_from_slice(&buf1);
 
         for _ in 0..random::random_u32_in_range(0, 10000)? {
-            increment_le(&mut buf1)?;
-            increment_le(&mut buf_add)?;
+            increment_le(&mut buf1[..l])?;
+            increment_le(&mut buf_add[..l])?;
         }
 
-        add_le(&mut buf2, &buf_add)?;
+        add_le(&mut buf2[..l], &buf_add[..l])?;
 
-        assert_eq!(compare_le(&buf1, &buf2)?, std::cmp::Ordering::Equal);
+        assert_eq!(
+            compare_le(&buf1[..l], &buf2[..l])?,
+            core::cmp::Ordering::Equal
+        );
 
         Ok(())
     }
 
     #[test]
     fn add_wrapping_behaviour() -> Result<(), AlkaliError> {
-        let mut buf1 = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-        random::fill_random(&mut buf1)?;
-        let mut buf2 = buf1.clone();
-        let buf_add = vec![0xff; buf1.len()];
+        let mut buf1 = [0u8; 1000];
+        let mut buf2 = [0u8; 1000];
+        let buf_add = [0xff; 1000];
+        let l = random::random_u32_in_range(0, 1000)? as usize;
+        random::fill_random(&mut buf1[..l])?;
+        buf2.copy_from_slice(&buf1);
 
-        increment_le(&mut buf2)?;
-        add_le(&mut buf2, &buf_add)?;
+        increment_le(&mut buf2[..l])?;
+        add_le(&mut buf2[..l], &buf_add[..l])?;
 
-        assert_eq!(compare_le(&buf1, &buf2)?, std::cmp::Ordering::Equal);
+        assert_eq!(
+            compare_le(&buf1[..l], &buf2[..l])?,
+            core::cmp::Ordering::Equal
+        );
 
         Ok(())
     }
@@ -463,17 +475,18 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn pad_and_unpad() -> Result<(), AlkaliError> {
         for _ in 0..2000 {
             let mut buf = vec![0; random::random_u32_in_range(0, 200)? as usize];
             let buf_clone = buf.clone();
             let blocksize = random::random_u32_in_range(1, 501)? as usize;
 
-            pad(&mut buf, blocksize)?;
+            super::pad(&mut buf, blocksize)?;
             assert_eq!(buf.len() % blocksize, 0);
             assert_eq!(&buf[..buf_clone.len()], &buf_clone);
 
-            assert_eq!(unpad(&buf, blocksize)?, &buf_clone);
+            assert_eq!(super::unpad(&buf, blocksize)?, &buf_clone);
         }
 
         Ok(())

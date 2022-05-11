@@ -10,6 +10,8 @@
 //! cases for hash algorithms.
 
 pub mod generic;
+#[cfg(feature = "std")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 pub mod kdf;
 pub mod pbkdf;
 #[cfg(feature = "sha2")]

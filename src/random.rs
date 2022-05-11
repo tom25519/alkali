@@ -61,7 +61,7 @@ mem::hardened_buffer! {
     /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will be
     /// zeroed on drop. A number of other security measures are taken to protect its contents. This
     /// type in particular can be thought of as roughly equivalent to a `[u8; SEED_LENGTH]`, and
-    /// implements [`std::ops::Deref`], so it can be used like it is an `&[u8]`. This struct uses
+    /// implements [`core::ops::Deref`], so it can be used like it is an `&[u8]`. This struct uses
     /// heap memory while in scope, allocated using Sodium's [secure memory
     /// utilities](https://doc.libsodium.org/memory_management).
     pub Seed(SEED_LENGTH)
@@ -214,7 +214,6 @@ mod tests {
     };
     use crate::AlkaliError;
     use rand_core::{Error as RandError, RngCore};
-    use std::collections::HashSet;
 
     #[test]
     fn random_u32_appears_random() -> Result<(), AlkaliError> {
@@ -255,8 +254,15 @@ mod tests {
     fn fill_random_appears_random() -> Result<(), AlkaliError> {
         let mut buf = [0u8; 65536];
         fill_random(&mut buf)?;
-        let unique: HashSet<_> = buf.iter().collect();
-        assert_eq!(unique.len(), 256);
+
+        let mut seen = [0; 256];
+        for b in buf {
+            seen[b as usize] += 1;
+        }
+
+        for c in seen {
+            assert!(c > 0);
+        }
 
         Ok(())
     }
@@ -303,8 +309,15 @@ mod tests {
 
         let mut buf = [0u8; 65536];
         SodiumRng.try_fill_bytes(&mut buf)?;
-        let unique: HashSet<_> = buf.iter().collect();
-        assert_eq!(unique.len(), 256);
+
+        let mut seen = [0; 256];
+        for b in buf {
+            seen[b as usize] += 1;
+        }
+
+        for c in seen {
+            assert!(c > 0);
+        }
 
         Ok(())
     }

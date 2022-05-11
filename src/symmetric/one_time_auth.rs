@@ -132,9 +132,9 @@ pub enum OneTimeAuthError {
 pub mod poly1305 {
     use super::OneTimeAuthError;
     use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
+    use core::marker::PhantomData;
+    use core::ptr;
     use libsodium_sys as sodium;
-    use std::marker::PhantomData;
-    use std::ptr;
 
     /// The length of a one-time key to authenticate a message, in bytes.
     pub const KEY_LENGTH: usize = sodium::crypto_onetimeauth_poly1305_KEYBYTES as usize;
@@ -159,7 +159,7 @@ pub mod poly1305 {
         /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will
         /// be zeroed on drop. A number of other security measures are taken to protect its
         /// contents. This type in particular can be thought of as roughly equivalent to a `[u8;
-        /// KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is an
+        /// KEY_LENGTH]`, and implements [`core::ops::Deref`] so it can be used like it is an
         /// `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's [secure
         /// memory utilities](https://doc.libsodium.org/memory_management).
         pub Key(KEY_LENGTH);
@@ -323,7 +323,7 @@ pub mod poly1305 {
 
             Ok(Self {
                 state,
-                _marker: std::marker::PhantomData,
+                _marker: PhantomData,
             })
         }
 
@@ -435,7 +435,7 @@ pub mod poly1305 {
                 //     type's methods are accessible.
                 // * Is a memory leak possible in safe code?
                 //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                //     `std::mem::forget`, the destructor will not be called even though the struct
+                //     `core::mem::forget`, the destructor will not be called even though the struct
                 //     is dropped. However, it is documented that in these cases heap memory may be
                 //     leaked, so this is expected behaviour. In addition, certain signal interrupts
                 //     or using panic=abort behaviour will mean the destructor is not called.

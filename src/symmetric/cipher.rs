@@ -195,7 +195,7 @@ macro_rules! cipher_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are also taken to
             /// protect its contents. This type in particular can be thought of as roughly
-            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be
+            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`core::ops::Deref`] so it can be
             /// used like it is an `&[u8]`. This struct uses heap memory while in scope, allocated
             /// using Sodium's [secure memory
             /// utilities](https://doc.libsodium.org/memory_management).
@@ -667,17 +667,19 @@ macro_rules! cipher_tests {
         #[test]
         fn test_vectors() -> Result<(), AlkaliError> {
             let mut key = Key::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 key.copy_from_slice(&$key);
-                let mut c = vec![0; $msg.len() + MAC_LENGTH];
                 let (l, _) = encrypt(&$msg, &key, Some(&$nonce), &mut c)?;
                 assert_eq!(l, $msg.len() + MAC_LENGTH);
                 assert_eq!(&c[..MAC_LENGTH], &$mac[..]);
-                assert_eq!(&c[MAC_LENGTH..], &$c[..]);
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(decrypt(&c, &key, &$nonce, &mut m)?, $msg.len());
-                assert_eq!(&m, &$msg);
+                assert_eq!(&c[MAC_LENGTH..$msg.len() + MAC_LENGTH], &$c[..]);
+                assert_eq!(
+                    decrypt(&c[..$msg.len() + MAC_LENGTH], &key, &$nonce, &mut m)?, $msg.len()
+                );
+                assert_eq!(&m[..$msg.len()], &$msg[..$msg.len()]);
             )*
 
             Ok(())
@@ -686,17 +688,17 @@ macro_rules! cipher_tests {
         #[test]
         fn test_vectors_detached() -> Result<(), AlkaliError> {
             let mut key = Key::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 key.copy_from_slice(&$key);
-                let mut c = vec![0; $msg.len()];
                 let (l, _, mac) = encrypt_detached(&$msg, &key, Some(&$nonce), &mut c)?;
                 assert_eq!(l, $msg.len());
-                assert_eq!(&c, &$c);
+                assert_eq!(&c[..$msg.len()], &$c[..$msg.len()]);
                 assert_eq!(&mac, &$mac);
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(decrypt_detached(&c, &mac, &key, &$nonce, &mut m)?, $msg.len());
-                assert_eq!(&m, &$msg);
+                assert_eq!(decrypt_detached(&c[..$msg.len()], &mac, &key, &$nonce, &mut m)?, $msg.len());
+                assert_eq!(&m[..$msg.len()], &$msg[..$msg.len()]);
             )*
 
             Ok(())

@@ -174,7 +174,7 @@ macro_rules! seal_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; PRIVATE_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used
+            /// `[u8; PRIVATE_KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used
             /// like it is an `&[u8]`. This struct uses heap memory while in scope, allocated using
             /// Sodium's [secure memory utilities](https://doc.libsodium.org/memory_management).
             ///
@@ -195,7 +195,7 @@ macro_rules! seal_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; SESSION_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used
+            /// `[u8; SESSION_KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used
             /// like it is an `&[u8]`. This struct uses heap memory while in scope, allocated using
             /// Sodium's [secure memory utilities](https://doc.libsodium.org/memory_management).
             pub Seed(KEY_SEED_LENGTH);
@@ -537,15 +537,19 @@ macro_rules! seal_tests {
             for _ in 0..100 {
                 let keypair = Keypair::generate()?;
 
-                let mut msg = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-                let mut c = vec![0; msg.len() + OVERHEAD_LENGTH];
-                random::fill_random(&mut msg)?;
+                let mut msg = [0u8; 1000];
+                let mut c = [0u8; 1000 + OVERHEAD_LENGTH];
+                let l = random::random_u32_in_range(0, 1000)? as usize;
+                random::fill_random(&mut msg[..l])?;
 
-                assert_eq!(encrypt(&msg, &keypair.public_key, &mut c)?, c.len());
+                assert_eq!(
+                    encrypt(&msg[..l], &keypair.public_key, &mut c)?,
+                    l + OVERHEAD_LENGTH
+                );
 
-                let mut p = vec![0; msg.len()];
+                let mut p = [0u8; 1000];
 
-                assert_eq!(decrypt(&c, &keypair, &mut p)?, msg.len());
+                assert_eq!(decrypt(&c[..l + OVERHEAD_LENGTH], &keypair, &mut p)?, l);
                 assert_eq!(msg, p);
             }
 

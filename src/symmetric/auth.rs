@@ -160,7 +160,7 @@ macro_rules! auth_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is
+            /// `[u8; KEY_LENGTH]`, and implements [`core::ops::Deref`] so it can be used like it is
             /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
             /// [secure memory utilities](https://doc.libsodium.org/memory_management).
             pub Key(KEY_LENGTH);
@@ -209,8 +209,8 @@ macro_rules! auth_module {
         /// any of its inner state, so this shouldn't be something that you need to worry about.
         #[derive(Debug)]
         pub struct Multipart {
-            state: std::ptr::NonNull<$mp_state>,
-            _marker: std::marker::PhantomData<$mp_state>,
+            state: core::ptr::NonNull<$mp_state>,
+            _marker: core::marker::PhantomData<$mp_state>,
         }
 
         impl Multipart {
@@ -270,7 +270,7 @@ macro_rules! auth_module {
 
                 Ok(Self {
                     state,
-                    _marker: std::marker::PhantomData,
+                    _marker: core::marker::PhantomData,
                 })
             }
 
@@ -308,14 +308,14 @@ macro_rules! auth_module {
                     // struct. Therefore, after the copy, `state` must also point to a valid
                     // representation of a `crypto_auth_state` struct, and can be used with the
                     // multipart auth functions from Sodium.
-                    std::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
+                    core::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
 
                     state
                 };
 
                 Ok(Self {
                     state,
-                    _marker: std::marker::PhantomData,
+                    _marker: core::marker::PhantomData,
                 })
             }
 
@@ -426,7 +426,7 @@ macro_rules! auth_module {
                     //     type's methods are accessible.
                     // * Is a memory leak possible in safe code?
                     //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                    //     `std::mem::forget`, the destructor will not be called even though the
+                    //     `core::mem::forget`, the destructor will not be called even though the
                     //     struct is dropped. However, it is documented that in these cases heap
                     //     memory may be leaked, so this is expected behaviour. In addition, certain
                     //     signal interrupts or using panic=abort behaviour will mean the destructor
@@ -582,12 +582,12 @@ macro_rules! auth_tests {
 
         #[test]
         fn random_tests_multipart() -> Result<(), AlkaliError> {
+            let mut msg = [0; 2000];
             for i in 1..2000 {
                 let key = Key::generate()?;
-                let mut msg = vec![0; i];
-                fill_random(&mut msg)?;
+                fill_random(&mut msg[..i])?;
 
-                let tag_single = authenticate(&msg, &key)?;
+                let tag_single = authenticate(&msg[..i], &key)?;
                 let mut state = Multipart::new(&key)?;
                 let mut written = 0;
                 while written < i {
@@ -597,7 +597,7 @@ macro_rules! auth_tests {
                 }
                 let mut tag_multi = state.authenticate();
                 assert_eq!(tag_single, tag_multi);
-                verify(&msg, &tag_multi, &key)?;
+                verify(&msg[..i], &tag_multi, &key)?;
 
                 let mut state = Multipart::new(&key)?;
                 let mut written = 0;

@@ -63,12 +63,13 @@
 //! [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) to find libsodium.
 //! Alternatively, you can set the `SODIUM_LIB_DIR` environment variable to specify the location of
 //! libsodium on your system. Sodium will be statically linked by default, but you can set
-//! `SODIUM_SHARED` to dynamically link the library.
+//! `SODIUM_SHARED` to dynamically link the library. Note that alkali is built assuming that it is
+//! linked against Sodium 1.0.18 stable.
 //!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
 //! custom allocator from Sodium to manage their memory. They can be used like standard array/slice
-//! types, as they implement [`std::ops::Deref`], [`AsRef`], etc., so anywhere where you might be
+//! types, as they implement [`core::ops::Deref`], [`AsRef`], etc., so anywhere where you might be
 //! able to use a `&[u8]`, a hardened buffer can also be used. The benefit to using these structs
 //! over just using normal arrays/vectors is that they have a number of protections implemented
 //! intended to prevent leakage of their contents via side channels.
@@ -86,7 +87,7 @@
 //! macro to produce an anonymous array-like buffer backed by hardened memory.
 //!
 //! In the future, we should be able to use the [Allocator
-//! API](https://doc.rust-lang.org/std/alloc/trait.Allocator.html) to simplify these types, but for
+//! API](https://doc.rust-lang.org/core/alloc/trait.Allocator.html) to simplify these types, but for
 //! the time being, we have to do a fair amount of manual memory management under the hood to
 //! enable them to work. Regardless, these implementation details do not require you to do anything
 //! differently yourself.
@@ -107,6 +108,7 @@
 //! alkali = { version = "0.1", features = ["hazmat"] }
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(doc_cfg, feature(doc_cfg))]
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
 #![cfg_attr(feature = "alloc", feature(nonnull_slice_from_raw_parts))]
@@ -118,6 +120,8 @@ pub mod asymmetric;
 #[cfg(feature = "curve")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
 pub mod curve;
+#[cfg(feature = "std")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 pub mod encode;
 pub mod hash;
 pub mod mem;
@@ -203,6 +207,8 @@ pub enum AlkaliError {
     GenericHashError(#[from] hash::generic::GenericHashError),
 
     /// An error occurred in the [`hash::kdf`] module.
+    #[cfg(feature = "std")]
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
     #[error("KDF error")]
     KDFError(#[from] hash::kdf::KDFError),
 
@@ -242,6 +248,10 @@ pub enum AlkaliError {
     #[error("stream cipher error")]
     StreamCipherError(#[from] symmetric::stream::StreamCipherError),
 }
+
+pub use sodium::{
+    SODIUM_LIBRARY_VERSION_MAJOR, SODIUM_LIBRARY_VERSION_MINOR, SODIUM_VERSION_STRING,
+};
 
 /// Used where Sodium returns an error which we didn't expect.
 ///

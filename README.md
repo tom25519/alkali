@@ -31,7 +31,7 @@ concerns.
 If you find a vulnerability in alkali, please immediately contact
 `tom25519@pm.me` with details.
 
-My [age](https://github.com/FiloSottile/age) public key (preferred) is:
+My [age](https://github.com/FiloSottile/age) public key is:
 
 ```text
 age1gglesedq4m2z9kc7urjhq3zlpc6qewcwpcna7s0lwh8k2c4e6fxqf3kdvq

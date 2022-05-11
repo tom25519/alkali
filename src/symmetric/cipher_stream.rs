@@ -141,9 +141,9 @@ pub enum CipherStreamError {
 pub mod xchacha20poly1305 {
     use super::CipherStreamError;
     use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
+    use core::marker::PhantomData;
+    use core::ptr;
     use libsodium_sys as sodium;
-    use std::marker::PhantomData;
-    use std::ptr;
 
     /// Types of message which can be sent as part of a stream.
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -210,7 +210,7 @@ pub mod xchacha20poly1305 {
         /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will
         /// be zeroed on drop. A number of other security measures are also taken to protect its
         /// contents. This type in particular can be thought of as roughly equivalent to a
-        /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be used like it is an
+        /// `[u8; KEY_LENGTH]`, and implements [`core::ops::Deref`] so it can be used like it is an
         /// `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's [secure
         /// memory utilities](https://doc.libsodium.org/memory_management).
         pub Key(KEY_LENGTH);
@@ -594,7 +594,7 @@ pub mod xchacha20poly1305 {
                 //     methods are accessible.
                 // * Is a memory leak possible in safe code?
                 //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                //     `std::mem::forget`, the destructor will not be called even though the struct
+                //     `core::mem::forget`, the destructor will not be called even though the struct
                 //     is dropped. However, it is documented that in these cases heap memory may be
                 //     leaked, so this is expected behaviour. In addition, certain signal interrupts
                 //     or using panic=abort behaviour will mean the destructor is not called.
@@ -825,7 +825,7 @@ pub mod xchacha20poly1305 {
                 //     methods are accessible.
                 // * Is a memory leak possible in safe code?
                 //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                //     `std::mem::forget`, the destructor will not be called even though the struct
+                //     `core::mem::forget`, the destructor will not be called even though the struct
                 //     is dropped. However, it is documented that in these cases heap memory may be
                 //     leaked, so this is expected behaviour. In addition, certain signal interrupts
                 //     or using panic=abort behaviour will mean the destructor is not called.
@@ -855,59 +855,76 @@ pub mod xchacha20poly1305 {
             let key = Key::generate()?;
 
             for _ in 0..1000 {
-                let mut ad = vec![0; random::random_u32_in_range(0, 100)? as usize];
-                let mut m1 = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-                let mut c1 = vec![0; m1.len() + OVERHEAD_LENGTH];
-                let mut m2 = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-                let mut c2 = vec![0; m2.len() + OVERHEAD_LENGTH];
-                let mut m3 = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-                let mut c3 = vec![0; m3.len() + OVERHEAD_LENGTH];
-                let mut m4 = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-                let mut c4 = vec![0; m4.len() + OVERHEAD_LENGTH];
+                let mut ad = [0u8; 100];
+                let mut m1 = [0u8; 1000];
+                let mut c1 = [0u8; 1000 + OVERHEAD_LENGTH];
+                let mut m2 = [0u8; 1000];
+                let mut c2 = [0u8; 1000 + OVERHEAD_LENGTH];
+                let mut m3 = [0u8; 1000];
+                let mut c3 = [0u8; 1000 + OVERHEAD_LENGTH];
+                let mut m4 = [0u8; 1000];
+                let mut c4 = [0u8; 1000 + OVERHEAD_LENGTH];
 
-                random::fill_random(&mut ad)?;
-                random::fill_random(&mut m1)?;
-                random::fill_random(&mut m2)?;
-                random::fill_random(&mut m3)?;
-                random::fill_random(&mut m4)?;
+                let al = random::random_u32_in_range(0, 100)? as usize;
+                let l1 = random::random_u32_in_range(0, 1000)? as usize;
+                let l2 = random::random_u32_in_range(0, 1000)? as usize;
+                let l3 = random::random_u32_in_range(0, 1000)? as usize;
+                let l4 = random::random_u32_in_range(0, 1000)? as usize;
+
+                random::fill_random(&mut ad[..al])?;
+                random::fill_random(&mut m1[..l1])?;
+                random::fill_random(&mut m2[..l2])?;
+                random::fill_random(&mut m3[..l3])?;
+                random::fill_random(&mut m4[..l4])?;
 
                 let mut enc_stream = EncryptionStream::new(&key)?;
                 let header = enc_stream.get_header();
-                assert_eq!(enc_stream.encrypt(&m1, None, &mut c1)?, c1.len());
                 assert_eq!(
-                    enc_stream.encrypt_push(&m2, Some(&ad[0..0]), &mut c2)?,
-                    c2.len()
+                    enc_stream.encrypt(&m1[..l1], None, &mut c1)?,
+                    l1 + OVERHEAD_LENGTH
                 );
-                assert_eq!(enc_stream.encrypt_rekey(&m3, None, &mut c3)?, c3.len());
-                assert_eq!(enc_stream.finalise(&m4, Some(&ad), &mut c4)?, c4.len());
+                assert_eq!(
+                    enc_stream.encrypt_push(&m2[..l2], Some(&ad[0..0]), &mut c2)?,
+                    l2 + OVERHEAD_LENGTH
+                );
+                assert_eq!(
+                    enc_stream.encrypt_rekey(&m3[..l3], None, &mut c3)?,
+                    l3 + OVERHEAD_LENGTH
+                );
+                assert_eq!(
+                    enc_stream.finalise(&m4[..l4], Some(&ad[..al]), &mut c4)?,
+                    l4 + OVERHEAD_LENGTH
+                );
 
-                let mut p1 = vec![0; m1.len()];
-                let mut p2 = vec![0; m2.len()];
-                let mut p3 = vec![0; m3.len()];
-                let mut p4 = vec![0; m4.len()];
+                let mut p1 = [0u8; 1000];
+                let mut p2 = [0u8; 1000];
+                let mut p3 = [0u8; 1000];
+                let mut p4 = [0u8; 1000];
 
                 let mut dec_stream = DecryptionStream::new(&key, &header)?;
                 assert_eq!(
-                    dec_stream.decrypt(&c1, None, &mut p1)?,
-                    (MessageType::Message, m1.len())
+                    dec_stream.decrypt(&c1[..l1 + OVERHEAD_LENGTH], None, &mut p1)?,
+                    (MessageType::Message, l1)
                 );
                 assert_eq!(
-                    dec_stream.decrypt(&c2, None, &mut p2)?,
-                    (MessageType::Push, m2.len())
+                    dec_stream.decrypt(&c2[..l2 + OVERHEAD_LENGTH], None, &mut p2)?,
+                    (MessageType::Push, l2)
                 );
                 assert_eq!(
-                    dec_stream.decrypt(&c3, None, &mut p3)?,
-                    (MessageType::Rekey, m3.len())
+                    dec_stream.decrypt(&c3[..l3 + OVERHEAD_LENGTH], None, &mut p3)?,
+                    (MessageType::Rekey, l3)
                 );
                 assert!(!dec_stream.is_finalised());
 
-                if ad.len() > 0 {
-                    assert!(dec_stream.decrypt(&c4, None, &mut p4).is_err());
+                if al > 0 {
+                    assert!(dec_stream
+                        .decrypt(&c4[..l4 + OVERHEAD_LENGTH], None, &mut p4)
+                        .is_err());
                 }
 
                 assert_eq!(
-                    dec_stream.decrypt(&c4, Some(&ad), &mut p4)?,
-                    (MessageType::Final, m4.len())
+                    dec_stream.decrypt(&c4[..l4 + OVERHEAD_LENGTH], Some(&ad[..al]), &mut p4)?,
+                    (MessageType::Final, l4)
                 );
                 assert!(dec_stream.is_finalised());
             }

@@ -119,7 +119,7 @@ macro_rules! chacha_aead_module {
         $encrypt_d:path,    // crypto_aead_encrypt_detached
         $decrypt_d:path,    // crypto_aead_decrypt_detached
     ) => {
-        use std::ptr;
+        use core::ptr;
         use $crate::symmetric::aead::AEADError;
         use $crate::{assert_not_err, mem, require_init, AlkaliError};
 
@@ -153,7 +153,7 @@ macro_rules! chacha_aead_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are also taken to
             /// protect its contents. This type in particular can be thought of as roughly
-            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be
+            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`core::ops::Deref`] so it can be
             /// used like it is an `&[u8]`. This struct uses heap memory while in scope, allocated
             /// using Sodium's [secure memory
             /// utilities](https://doc.libsodium.org/memory_management).
@@ -790,19 +790,22 @@ macro_rules! aead_tests {
         #[test]
         fn test_vectors() -> Result<(), AlkaliError> {
             let mut key = Key::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 key.copy_from_slice(&$key);
-                let mut c = vec![0; $msg.len() + MAC_LENGTH];
                 assert_eq!(
                     encrypt(&$msg, Some(&$ad), &key, &$nonce, &mut c)?,
                     $msg.len() + MAC_LENGTH
                 );
                 assert_eq!(&c[..$msg.len()], &$c[..]);
-                assert_eq!(&c[$msg.len()..], &$mac[..]);
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(decrypt(&c, Some(&$ad), &key, &$nonce, &mut m)?, $msg.len());
-                assert_eq!(&m, &$msg);
+                assert_eq!(&c[$msg.len()..$msg.len() + MAC_LENGTH], &$mac[..]);
+                assert_eq!(
+                    decrypt(&c[..$msg.len() + MAC_LENGTH], Some(&$ad), &key, &$nonce, &mut m)?,
+                    $msg.len()
+                );
+                assert_eq!(&m[..$msg.len()], &$msg[..$msg.len()]);
             )*
 
             Ok(())
@@ -811,20 +814,20 @@ macro_rules! aead_tests {
         #[test]
         fn test_vectors_detached() -> Result<(), AlkaliError> {
             let mut key = Key::new_empty()?;
+            let mut c = [0; 1024];
+            let mut m = [0; 1024];
 
             $(
                 key.copy_from_slice(&$key);
-                let mut c = vec![0; $msg.len()];
                 let (l, mac) = encrypt_detached(&$msg, Some(&$ad), &key, &$nonce, &mut c)?;
                 assert_eq!(l, $msg.len());
-                assert_eq!(&c, &$c);
+                assert_eq!(&c[..l], &$c[..l]);
                 assert_eq!(&mac, &$mac);
-                let mut m = vec![0; $msg.len()];
                 assert_eq!(
-                    decrypt_detached(&c, Some(&$ad), &mac, &key, &$nonce, &mut m)?,
+                    decrypt_detached(&c[..l], Some(&$ad), &mac, &key, &$nonce, &mut m)?,
                     $msg.len()
                 );
-                assert_eq!(&m, &$msg);
+                assert_eq!(&m[..l], &$msg[..l]);
             )*
 
             Ok(())

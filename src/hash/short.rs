@@ -78,8 +78,8 @@ macro_rules! short_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are taken to protect
             /// its contents. This type in particular can be thought of as roughly equivalent to a
-            /// `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
-            /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
+            /// `[u8; KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used like it
+            /// is an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
             /// [secure memory utilities](https://doc.libsodium.org/memory_management).
             pub Key(KEY_LENGTH);
         }

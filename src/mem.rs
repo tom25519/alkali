@@ -33,7 +33,7 @@
 //!
 //! # The `alloc` Feature
 //! Work is currently ongoing on standardising the Rust standard library's [`Allocator`
-//! API](https://doc.rust-lang.org/std/alloc/trait.Allocator.html), which allows for user-defined
+//! API](https://doc.rust-lang.org/core/alloc/trait.Allocator.html), which allows for user-defined
 //! allocators for many common Rust types (`Vec`, `Box`, etc.). The [`SodiumAllocator`] struct
 //! implements the `Allocator` trait, and can therefore be used for this purpose, providing an
 //! allocator based on Sodium's secure memory management tools. Similarly, the [`HardenedVec`] and
@@ -46,12 +46,17 @@
 // TODO: Testing for SodiumAllocator, HardenedBox, HardenedVec, hardened_buffer, anon_buffer
 // TODO: Protected types for hardened_buffer (noaccess/readonly)
 
-use crate::{require_init, AlkaliError};
-use libsodium_sys as sodium;
-use std::alloc::Layout;
 #[cfg(feature = "alloc")]
-use std::alloc::{AllocError, Allocator};
-use std::ptr::NonNull;
+extern crate alloc;
+
+use crate::{require_init, AlkaliError};
+#[cfg(feature = "alloc")]
+use alloc::{boxed::Box, vec::Vec};
+use core::alloc::Layout;
+#[cfg(feature = "alloc")]
+use core::alloc::{AllocError, Allocator};
+use core::ptr::NonNull;
+use libsodium_sys as sodium;
 
 /// An [`Allocator`] which allocates memory using Sodium's secure memory utilities.
 ///
@@ -109,17 +114,17 @@ pub type HardenedBox<T> = Box<T, SodiumAllocator>;
 ///
 /// `hardened_buffer!(Name(Size))` will create a new type `Name` that provides access to `Size`
 /// bytes of contiguous hardened memory. The new type will implement the following traits:
-/// * [`AsRef<[u8; $size]>`](std::convert::AsRef) and [`AsMut<[u8; $size]>`](std::convert::AsMut)
-/// * [`Borrow<[u8; $size]>`](std::borrow::Borrow) and
-///   [`BorrowMut<[u8; $size]>`](std::borrow::BorrowMut)
-/// * [`Debug`](std::fmt::Debug)
-/// * [`Deref`](std::ops::Deref) and [`DerefMut`](std::ops::DerefMut)
-/// * [`PartialEq<Self>`](std::cmp::PartialEq) and [`Eq<Self>`](std::cmp::Eq)
+/// * [`AsRef<[u8; $size]>`](core::convert::AsRef) and [`AsMut<[u8; $size]>`](core::convert::AsMut)
+/// * [`Borrow<[u8; $size]>`](core::borrow::Borrow) and
+///   [`BorrowMut<[u8; $size]>`](core::borrow::BorrowMut)
+/// * [`Debug`](core::fmt::Debug)
+/// * [`Deref`](core::ops::Deref) and [`DerefMut`](core::ops::DerefMut)
+/// * [`PartialEq<Self>`](core::cmp::PartialEq) and [`Eq<Self>`](core::cmp::Eq)
 ///     * This operation uses a constant-time comparison, so it can be used to compare buffers
 ///       without the risk of side-channel attacks
-/// * [`Pointer`](std::fmt::Pointer)
-/// * [`TryFrom<&[u8]>`](std::convert::TryFrom)
-/// * [`TryFrom<&[u8; $size]>`](std::convert::TryFrom)
+/// * [`Pointer`](core::fmt::Pointer)
+/// * [`TryFrom<&[u8]>`](core::convert::TryFrom)
+/// * [`TryFrom<&[u8; $size]>`](core::convert::TryFrom)
 ///
 /// The new type will also implement the methods `new_empty` (which creates a new, zeroed instance
 /// of the type), `zero` (which sets all the bytes in the buffer to zero in such a way that the
@@ -168,8 +173,8 @@ macro_rules! hardened_buffer {
         $(
             $(#[$metadata])*
             $vis struct $name {
-                ptr: std::ptr::NonNull<[u8; $size]>,
-                _marker: std::marker::PhantomData<[u8; $size]>,
+                ptr: core::ptr::NonNull<[u8; $size]>,
+                _marker: core::marker::PhantomData<[u8; $size]>,
             }
 
             impl $name {
@@ -202,7 +207,7 @@ macro_rules! hardened_buffer {
 
                     Ok(Self {
                         ptr,
-                        _marker: std::marker::PhantomData,
+                        _marker: core::marker::PhantomData,
                     })
                 }
 
@@ -267,7 +272,7 @@ macro_rules! hardened_buffer {
                         //     type's methods are accessible.
                         // * Is a memory leak possible in safe code?
                         //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`,
-                        //     or `std::mem::forget`, the destructor will not be called even though
+                        //     or `core::mem::forget`, the destructor will not be called even though
                         //     the buffer is dropped. However, it is documented that in these cases
                         //     heap memory may be leaked, so this is expected behaviour. In
                         //     addition, certain signal interrupts or using panic=abort behaviour
@@ -306,7 +311,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::convert::AsMut<[u8; $size]> for $name {
+            impl core::convert::AsMut<[u8; $size]> for $name {
                 fn as_mut(&mut self) -> &mut [u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -320,7 +325,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::convert::AsRef<[u8; $size]> for $name {
+            impl core::convert::AsRef<[u8; $size]> for $name {
                 fn as_ref(&self) -> &[u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -334,7 +339,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::borrow::Borrow<[u8; $size]> for $name {
+            impl core::borrow::Borrow<[u8; $size]> for $name {
                 fn borrow(&self) -> &[u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -348,7 +353,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::borrow::BorrowMut<[u8; $size]> for $name {
+            impl core::borrow::BorrowMut<[u8; $size]> for $name {
                 fn borrow_mut(&mut self) -> &mut [u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -362,13 +367,16 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::fmt::Debug for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    f.write_str(&format!("{}([u8; {}])", stringify!($name), $size))
+            impl core::fmt::Debug for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.write_str(stringify!($name))?;
+                    f.write_str("([u8; ")?;
+                    f.write_str(stringify!($size))?;
+                    f.write_str("])")
                 }
             }
 
-            impl std::ops::Deref for $name {
+            impl core::ops::Deref for $name {
                 type Target = [u8; $size];
 
                 fn deref(&self) -> &Self::Target {
@@ -384,9 +392,9 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::cmp::Eq for $name {}
+            impl core::cmp::Eq for $name {}
 
-            impl std::ops::DerefMut for $name {
+            impl core::ops::DerefMut for $name {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -400,15 +408,15 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl std::cmp::PartialEq<Self> for $name {
+            impl core::cmp::PartialEq<Self> for $name {
                 fn eq(&self, other: &Self) -> bool {
                     $crate::mem::eq(self.as_ref(), other.as_ref()).unwrap()
                 }
             }
 
-            impl std::fmt::Pointer for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-                    <std::ptr::NonNull<[u8; $size]> as std::fmt::Pointer>::fmt(&self.ptr, f)
+            impl core::fmt::Pointer for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+                    <core::ptr::NonNull<[u8; $size]> as core::fmt::Pointer>::fmt(&self.ptr, f)
                 }
             }
         )*
@@ -429,12 +437,12 @@ pub use hardened_buffer;
 ///
 /// `anon_buffer!(Size)` will return an array-like type of length `Size` backed by hardened memory.
 /// The new type will implement the following traits:
-/// * [`AsRef<[u8; $size]>`](std::convert::AsRef) and [`AsMut<[u8; $size]>`](std::convert::AsMut)
-/// * [`Borrow<[u8; $size]>`](std::borrow::Borrow) and
-///   [`BorrowMut<[u8; $size]>`](std::borrow::BorrowMut)
-/// * [`Debug`](std::fmt::Debug)
-/// * [`Deref`](std::ops::Deref) and [`DerefMut`](std::ops::DerefMut)
-/// * [`Pointer`](std::fmt::Pointer)
+/// * [`AsRef<[u8; $size]>`](core::convert::AsRef) and [`AsMut<[u8; $size]>`](core::convert::AsMut)
+/// * [`Borrow<[u8; $size]>`](core::borrow::Borrow) and
+///   [`BorrowMut<[u8; $size]>`](core::borrow::BorrowMut)
+/// * [`Debug`](core::fmt::Debug)
+/// * [`Deref`](core::ops::Deref) and [`DerefMut`](core::ops::DerefMut)
+/// * [`Pointer`](core::fmt::Pointer)
 ///
 /// The new type will also implement the methods `zero` (which sets all the bytes in the buffer to
 /// zero in such a way that the compiler will not optimize away the operation), and `try_clone`
@@ -591,7 +599,7 @@ mod tests {
     // Therefore, these tests may fail on platforms with very limited resources.
     use super::{clear, eq, free, is_zero, malloc};
     use crate::{random, AlkaliError};
-    use std::ptr::NonNull;
+    use core::ptr::NonNull;
 
     #[test]
     fn malloc_allocates_and_free_deallocates() -> Result<(), AlkaliError> {
@@ -654,10 +662,11 @@ mod tests {
     #[test]
     fn clear_tests() -> Result<(), AlkaliError> {
         for _ in 0..1000 {
-            let mut buf = vec![0; random::random_u32_in_range(0, 1000)? as usize];
-            random::fill_random(&mut buf)?;
-            clear(&mut buf)?;
-            assert_eq!(&buf, &vec![0; buf.len()]);
+            let mut buf = [0u8; 1000];
+            let l = random::random_u32_in_range(0, 1000)? as usize;
+            random::fill_random(&mut buf[..l])?;
+            clear(&mut buf[..l])?;
+            assert_eq!(&buf, &[0; 1000]);
         }
 
         Ok(())
@@ -666,12 +675,13 @@ mod tests {
     #[test]
     fn is_zero_tests() -> Result<(), AlkaliError> {
         for _ in 0..1000 {
-            let mut buf = vec![0; random::random_u32_in_range(100, 1000)? as usize];
-            assert!(is_zero(&buf)?);
-            random::fill_random(&mut buf)?;
-            assert!(!is_zero(&buf)?);
-            clear(&mut buf)?;
-            assert!(is_zero(&buf)?);
+            let mut buf = [0u8; 1000];
+            let l = random::random_u32_in_range(100, 1000)? as usize;
+            assert!(is_zero(&buf[..l])?);
+            random::fill_random(&mut buf[..l])?;
+            assert!(!is_zero(&buf[..l])?);
+            clear(&mut buf[..l])?;
+            assert!(is_zero(&buf[..l])?);
         }
 
         Ok(())

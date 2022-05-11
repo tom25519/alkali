@@ -120,7 +120,7 @@ macro_rules! stream_module {
             /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and
             /// will be zeroed on drop. A number of other security measures are also taken to
             /// protect its contents. This type in particular can be thought of as roughly
-            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`std::ops::Deref`] so it can be
+            /// equivalent to a `[u8; KEY_LENGTH]`, and implements [`core::ops::Deref`] so it can be
             /// used like it is an `&[u8]`. This struct uses heap memory while in scope, allocated
             /// using Sodium's [secure memory
             /// utilities](https://doc.libsodium.org/memory_management).
@@ -442,7 +442,7 @@ macro_rules! expansion_function {
 
             let const_ptr = match constants {
                 Some(c) => c.as_ptr(),
-                None => std::ptr::null(),
+                None => core::ptr::null(),
             };
 
             let expand_result = unsafe {
@@ -546,18 +546,18 @@ macro_rules! stream_tests {
         #[test]
         fn test_vectors() -> Result<(), AlkaliError> {
             let mut key = Key::new_empty()?;
+            let mut m = [0; 1024];
+            let mut c = [0; 1024];
+            let mut ks = [0; 1024];
 
             $(
                 key.copy_from_slice(&$key);
-                let mut c = vec![0; $msg.len()];
                 assert_eq!(encrypt(&$msg, &key, &$nonce, &mut c)?, $msg.len());
-                assert_eq!(&c, &$c);
-                let mut m = vec![0; $msg.len()];
-                assert_eq!(decrypt(&$c, &key, &$nonce, &mut m)?, $msg.len());
-                assert_eq!(&m, &$msg);
-                let mut ks = vec![0; $msg.len()];
-                keystream(&key, &$nonce, &mut ks)?;
-                assert_eq!(&ks, &$keystream);
+                assert_eq!(&c[..$msg.len()], &$c[..$msg.len()]);
+                assert_eq!(decrypt(&$c[..$msg.len()], &key, &$nonce, &mut m)?, $msg.len());
+                assert_eq!(&m[..$msg.len()], &$msg[..$msg.len()]);
+                keystream(&key, &$nonce, &mut ks[..$msg.len()])?;
+                assert_eq!(&ks[..$msg.len()], &$keystream[..$msg.len()]);
             )*
 
             Ok(())
@@ -692,7 +692,7 @@ pub mod xsalsa20 {
 
         let const_ptr = match constants {
             Some(c) => c.as_ptr(),
-            None => std::ptr::null(),
+            None => core::ptr::null(),
         };
 
         let hsalsa_result = unsafe {
@@ -1480,7 +1480,7 @@ pub mod xchacha20 {
 
         let const_ptr = match constants {
             Some(c) => c.as_ptr(),
-            None => std::ptr::null(),
+            None => core::ptr::null(),
         };
 
         let hchacha_result = unsafe {

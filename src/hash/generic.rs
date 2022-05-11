@@ -143,9 +143,9 @@ pub enum GenericHashError {
 pub mod blake2b {
     use super::GenericHashError;
     use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
+    use core::marker::PhantomData;
+    use core::ptr;
     use libsodium_sys as sodium;
-    use std::marker::PhantomData;
-    use std::ptr;
 
     /// The minimum output length of the hash function, in bytes.
     ///
@@ -211,7 +211,7 @@ pub mod blake2b {
         /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will
         /// be zeroed on drop. A number of other security measures are taken to protect its
         /// contents. This type in particular can be thought of as roughly equivalent to a `[u8;
-        /// KEY_LENGTH_DEFAULT]`, and implements [`std::ops::Deref`], so it can be used like it is
+        /// KEY_LENGTH_DEFAULT]`, and implements [`core::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory management](https://doc.libsodium.org/memory_management).
         pub Key(KEY_LENGTH_DEFAULT);
@@ -510,6 +510,8 @@ pub mod blake2b {
         ///
         /// The returned vector will be the same length specified when instantiating the struct with
         /// [`Multipart::new`] or [`Multipart::new_keyed`].
+        #[cfg(feature = "std")]
+        #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
         pub fn calculate_to_vec(mut self) -> Result<Vec<u8>, AlkaliError> {
             let mut output = vec![0u8; self.output_len];
             self.finalise(&mut output)?;
@@ -524,13 +526,14 @@ pub mod blake2b {
         /// [`Multipart::new_keyed`], otherwise an error will be returned.
         ///
         /// This comparison runs in constant time for a given digest length.
-        pub fn compare(mut self, digest: &[u8]) -> Result<bool, AlkaliError> {
+        #[cfg(feature = "std")]
+        #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
+        pub fn compare(self, digest: &[u8]) -> Result<bool, AlkaliError> {
             if digest.len() != self.output_len {
                 return Err(GenericHashError::OutputLengthChanged.into());
             }
 
-            let mut output = vec![0u8; self.output_len];
-            self.finalise(&mut output)?;
+            let output = self.calculate_to_vec()?;
             mem::eq(digest, &output)
         }
     }
@@ -551,7 +554,7 @@ pub mod blake2b {
                 //     methods are accessible.
                 // * Is a memory leak possible in safe code?
                 //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                //     `std::mem::forget`, the destructor will not be called even though the struct
+                //     `core::mem::forget`, the destructor will not be called even though the struct
                 //     is dropped. However, it is documented that in these cases heap memory may be
                 //     leaked, so this is expected behaviour. In addition, certain signal interrupts
                 //     or using panic=abort behaviour will mean the destructor is not called.
@@ -696,6 +699,8 @@ pub mod blake2b {
     /// (thereby turning the hash into a MAC), it must be at least [`KEY_LENGTH_MIN`] bytes long.
     /// Shorter keys are insufficient to be cryptographic secrets. It is recommended to use a key of
     /// at least [`KEY_LENGTH_DEFAULT`] bytes, and the [`Key`] type exists for this purpose.
+    #[cfg(feature = "std")]
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
     pub fn hash_custom_to_vec(
         message: &[u8],
         key: Option<&[u8]>,

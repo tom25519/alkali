@@ -97,8 +97,8 @@ macro_rules! sha2_module {
         /// This struct uses heap memory while in scope, allocated using Sodium's [secure memory
         /// utilities](https://doc.libsodium.org/memory_management).
         pub struct Multipart {
-            state: std::ptr::NonNull<$mp_state>,
-            _marker: std::marker::PhantomData<$mp_state>,
+            state: core::ptr::NonNull<$mp_state>,
+            _marker: core::marker::PhantomData<$mp_state>,
         }
 
         impl Multipart {
@@ -147,7 +147,7 @@ macro_rules! sha2_module {
 
                 Ok(Self {
                     state,
-                    _marker: std::marker::PhantomData,
+                    _marker: core::marker::PhantomData,
                 })
             }
 
@@ -182,14 +182,14 @@ macro_rules! sha2_module {
                     // struct. Therefore, after the copy, `state` must also point to a valid
                     // representation of a `crypto_hash_state` struct, and can be used with the SHA2
                     // functions from Sodium.
-                    std::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
+                    core::ptr::copy_nonoverlapping(self.state.as_ptr(), state.as_mut(), 1);
 
                     state
                 };
 
                 Ok(Self {
                     state,
-                    _marker: std::marker::PhantomData,
+                    _marker: core::marker::PhantomData,
                 })
             }
 
@@ -274,7 +274,7 @@ macro_rules! sha2_module {
                     //     type's methods are accessible.
                     // * Is a memory leak possible in safe code?
                     //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                    //     `std::mem::forget`, the destructor will not be called even though the
+                    //     `core::mem::forget`, the destructor will not be called even though the
                     //     struct is dropped. However, it is documented that in these cases heap
                     //     memory may be leaked, so this is expected behaviour. In addition, certain
                     //     signal interrupts or using panic=abort behaviour will mean the destructor

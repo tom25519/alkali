@@ -173,9 +173,9 @@ pub enum SignError {
 pub mod ed25519 {
     use super::SignError;
     use crate::{assert_not_err, mem, require_init, unexpected_err, AlkaliError};
+    use core::marker::PhantomData;
+    use core::ptr;
     use libsodium_sys as sodium;
-    use std::marker::PhantomData;
-    use std::ptr;
 
     /// The length of a private key for signing messages, in bytes.
     pub const PRIVATE_KEY_LENGTH: usize = sodium::crypto_sign_ed25519_SECRETKEYBYTES as usize;
@@ -213,7 +213,7 @@ pub mod ed25519 {
         /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will
         /// be zeroed on drop. A number of other security measures are taken to protect its
         /// contents. This type in particular can be thought of as roughly equivalent to a `[u8;
-        /// PRIVATE_KEY_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
+        /// PRIVATE_KEY_LENGTH]`, and implements [`core::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
         pub PrivateKey(PRIVATE_KEY_LENGTH);
@@ -235,7 +235,7 @@ pub mod ed25519 {
         /// This is a [hardened buffer type](https://docs.rs/alkali#hardened-buffer-types), and will
         /// be zeroed on drop. A number of other security measures are taken to protect its
         /// contents. This type in particular can be thought of as roughly equivalent to a `[u8;
-        /// KEYPAIR_SEED_LENGTH]`, and implements [`std::ops::Deref`], so it can be used like it is
+        /// KEYPAIR_SEED_LENGTH]`, and implements [`core::ops::Deref`], so it can be used like it is
         /// an `&[u8]`. This struct uses heap memory while in scope, allocated using Sodium's
         /// [secure memory utilities](https://doc.libsodium.org/memory_management).
         pub Seed(KEYPAIR_SEED_LENGTH);
@@ -652,7 +652,7 @@ pub mod ed25519 {
                 //     type's methods are accessible.
                 // * Is a memory leak possible in safe code?
                 //   * Yes: If the user uses something like `Box::leak()`, `ManuallyDrop`, or
-                //     `std::mem::forget`, the destructor will not be called even though the struct
+                //     `core::mem::forget`, the destructor will not be called even though the struct
                 //     is dropped. However, it is documented that in these cases heap memory may be
                 //     leaked, so this is expected behaviour. In addition, certain signal interrupts
                 //     or using panic=abort behaviour will mean the destructor is not called.

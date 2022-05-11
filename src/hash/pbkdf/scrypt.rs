@@ -30,7 +30,6 @@ pbkdf_module! {
 #[cfg(test)]
 mod tests {
     use super::super::{kdf_tests, verify_password_invalid_tests, verify_password_valid_tests};
-    use crate::AlkaliError;
 
     kdf_tests! {
         {
@@ -494,8 +493,9 @@ mod tests {
         },
     ];
 
+    #[cfg(feature = "std")]
     #[test]
-    fn needs_rehash() -> Result<(), AlkaliError> {
+    fn needs_rehash() -> Result<(), crate::AlkaliError> {
         use crate::hash::pbkdf::RehashResult;
 
         const OPS_LIMIT: usize = super::OPS_LIMIT_INTERACTIVE;
