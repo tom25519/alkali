@@ -66,6 +66,10 @@
 //! `SODIUM_SHARED` to dynamically link the library. Note that alkali is built assuming that it is
 //! linked against Sodium 1.0.18 stable.
 //!
+//! Support for `no_std` environments can be enabled by disabling the `std` feature. Note that some
+//! APIs will be disabled: Those which require `std` support are marked as such in the
+//! documentation.
+//!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
 //! custom allocator from Sodium to manage their memory. They can be used like standard array/slice
@@ -114,7 +118,6 @@
 #![cfg_attr(feature = "alloc", feature(nonnull_slice_from_raw_parts))]
 
 use libsodium_sys as sodium;
-use thiserror::Error;
 
 pub mod asymmetric;
 #[cfg(feature = "curve")]
@@ -133,18 +136,92 @@ pub use sodium::{
     SODIUM_LIBRARY_VERSION_MAJOR, SODIUM_LIBRARY_VERSION_MINOR, SODIUM_VERSION_STRING,
 };
 
-/// General error type used in alkali.
-///
-/// This type is returned by functions which can possibly fail throughout alkali.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum AlkaliError {
+/// Implements the `AlkaliError` enum.
+macro_rules! define_alkali_error {
+    (
+        $(
+            basic
+            $(#[$basicmeta:meta])*
+            $basicvar:ident,
+        )*
+        $(
+            compound
+            $(#[$meta:meta])*
+            $var:ident($source:path),
+        )*
+        $(
+            gated($feat:expr, $show:expr)
+            $(#[$gatedmeta:meta])*
+            $gatedvar:ident($gatedsource:path),
+        )*
+    ) => {
+        /// General error type used in alkali.
+        ///
+        /// This type is returned by functions which can possibly fail throughout alkali.
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub enum AlkaliError {
+            $(
+                $(#[$basicmeta])*
+                $basicvar,
+            )*
+            $(
+                $(#[$meta])*
+                $var($source),
+            )*
+            $(
+                $(#[$gatedmeta])*
+                #[cfg(feature = $feat)]
+                #[cfg_attr(doc_cfg, doc(cfg(feature = $show)))]
+                $gatedvar($gatedsource),
+            )*
+        }
+
+        #[cfg(feature = "std")]
+        impl std::error::Error for AlkaliError {}
+
+        impl core::fmt::Display for AlkaliError {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self {
+                    $(
+                        Self::$basicvar => {
+                            f.write_str("AlkaliError::")?;
+                            f.write_str(stringify!($basicvar))
+                        }
+                    )*
+                    $(
+                        Self::$var(source) => {
+                            f.write_str("AlkaliError::")?;
+                            f.write_str(stringify!($var))?;
+                            f.write_str("(")?;
+                            source.fmt(f)?;
+                            f.write_str(")")
+                        }
+                    )*
+                    $(
+                        #[cfg(feature = $feat)]
+                        Self::$gatedvar(source) => {
+                            f.write_str("AlkaliError::")?;
+                            f.write_str(stringify!($gatedvar))?;
+                            f.write_str("(")?;
+                            source.fmt(f)?;
+                            f.write_str(")")
+                        }
+                    )*
+                }
+            }
+        }
+    }
+}
+
+define_alkali_error! {
+    basic
     /// Failed to initialise Sodium.
     ///
-    /// This corresponds to a call to `sodium_init` returning -1, indicating initialisation
-    /// failure. In such a case, Sodium is unsafe to use.
-    #[error("failed to initialise libsodium")]
+    /// This corresponds to a call to `sodium_init` returning -1, indicating initialisation failure.
+    /// In such a case, Sodium is unsafe to use.
     SodiumInitFailed,
 
+    basic
     /// Memory management error.
     ///
     /// This could indicate a number of possible issues. In the worst case, it indicates a buffer
@@ -152,105 +229,96 @@ pub enum AlkaliError {
     /// any other reason secure memory allocation may fail. Sodium's allocator is less likely to
     /// succeed in general than the standard operating system allocator, since there are limits
     /// placed on how much memory can be locked, etc.
-    #[error("memory management error")]
     MemoryManagement,
 
+    basic
     /// Tried to create a hardened buffer from an incorrectly sized slice.
-    #[error("incorrect slice length")]
     IncorrectSliceLength,
 
+    basic
     /// The slices supplied to [`util::add_le`], [`util::sub_le`], or [`util::compare_le`] differ
     /// in length.
-    #[error("numbers differ in length")]
     NumberLengthsDiffer,
 
+    basic
     /// Could not add padding to the provided buffer.
     ///
     /// This should only occur if `blocksize` was set to zero.
-    #[error("failed to pad the provided buffer")]
     PaddingError,
 
+    basic
     /// Could not calculate the unpadded buffer size.
     ///
     /// This can occur if `blocksize` was set to zero, or if `buf` does not appear to be correctly
     /// padded.
-    #[error("failed to unpad the provided buffer")]
     UnpaddingError,
 
+    basic
     /// Failed to decode the provided hex/base64 string.
     ///
     /// This could occur if the string contains invalid characters which were not marked to be
     /// ignored, or if the output was insufficient to store the decoded bytes.
-    #[error("could not decode provided hex/base64")]
     DecodeError,
 
+    compound
     /// An error occurred in the [`asymmetric::cipher`] module.
-    #[error("asymmetric cipher error")]
-    AsymmetricCipherError(#[from] asymmetric::cipher::CipherError),
+    AsymmetricCipherError(asymmetric::cipher::AsymmetricCipherError),
 
+    compound
     /// An error occurred in the [`asymmetric::kx`] module.
-    #[error("key exchange error")]
-    KeyExchangeError(#[from] asymmetric::kx::KeyExchangeError),
+    KeyExchangeError(asymmetric::kx::KeyExchangeError),
 
+    compound
     /// An error occurred in the [`asymmetric::seal`] module.
-    #[error("seal error")]
-    SealError(#[from] asymmetric::seal::SealError),
+    SealError(asymmetric::seal::SealError),
 
+    compound
     /// An error occurred in the [`asymmetric::sign`] module.
-    #[error("signing error")]
-    SignError(#[from] asymmetric::sign::SignError),
+    SignError(asymmetric::sign::SignError),
 
-    /// An error occurred in the [`curve`] module.
-    #[cfg(feature = "curve")]
-    #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
-    #[error("elliptic curve error")]
-    CurveError(#[from] curve::CurveError),
-
+    compound
     /// An error occurred in the [`hash::generic`] module.
-    #[error("hash error")]
-    GenericHashError(#[from] hash::generic::GenericHashError),
+    GenericHashError(hash::generic::GenericHashError),
 
-    /// An error occurred in the [`hash::kdf`] module.
-    #[cfg(feature = "std")]
-    #[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
-    #[error("KDF error")]
-    KDFError(#[from] hash::kdf::KDFError),
-
+    compound
     /// An error occurred in the [`hash::pbkdf`] module.
-    #[error("PBKDF error")]
-    PasswordHashError(#[from] hash::pbkdf::PasswordHashError),
+    PasswordHashError(hash::pbkdf::PasswordHashError),
 
+    compound
     /// An error occurred in the [`random`] module.
-    #[error("PRNG error")]
-    RandomError(#[from] random::RandomError),
+    RandomError(random::RandomError),
 
+    compound
     /// An error occurred in the [`symmetric::aead`] module.
-    #[error("symmetric AEAD error")]
-    AEADError(#[from] symmetric::aead::AEADError),
+    AEADError(symmetric::aead::AEADError),
 
+    compound
     /// An error occurred in the [`symmetric::auth`] module.
-    #[error("authentication error")]
-    AuthError(#[from] symmetric::auth::AuthError),
+    AuthError(symmetric::auth::AuthError),
 
+    compound
     /// An error occurred in the [`symmetric::cipher`] module.
-    #[error("symmetric cipher error")]
-    SymmetricCipherError(#[from] symmetric::cipher::CipherError),
+    SymmetricCipherError(symmetric::cipher::SymmetricCipherError),
 
+    compound
     /// An error occurred in the [`symmetric::cipher_stream`] module.
-    #[error("symmetric cipher stream error")]
-    CipherStreamError(#[from] symmetric::cipher_stream::CipherStreamError),
+    CipherStreamError(symmetric::cipher_stream::CipherStreamError),
 
+    gated("curve", "hazmat")
+    /// An error occurred in the [`curve`] module.
+    CurveError(curve::CurveError),
+
+    gated("std", "std")
+    /// An error occurred in the [`hash::kdf`] module.
+    KDFError(hash::kdf::KDFError),
+
+    gated("onetimeauth", "hazmat")
     /// An error occurred in the [`symmetric::one_time_auth`] module.
-    #[cfg(feature = "onetimeauth")]
-    #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
-    #[error("one-time authentication error")]
-    OneTimeAuthError(#[from] symmetric::one_time_auth::OneTimeAuthError),
+    OneTimeAuthError(symmetric::one_time_auth::OneTimeAuthError),
 
+    gated("stream", "hazmat")
     /// An error occurred in the [`symmetric::stream`] module.
-    #[cfg(feature = "stream")]
-    #[cfg_attr(doc_cfg, doc(cfg(feature = "hazmat")))]
-    #[error("stream cipher error")]
-    StreamCipherError(#[from] symmetric::stream::StreamCipherError),
+    StreamCipherError(symmetric::stream::StreamCipherError),
 }
 
 /// Implement an error enum.
@@ -287,6 +355,12 @@ macro_rules! error_type {
                         }
                     )*
                 }
+            }
+        }
+
+        impl From<$name> for $crate::AlkaliError {
+            fn from(e: $name) -> Self {
+                Self::$name(e)
             }
         }
     }

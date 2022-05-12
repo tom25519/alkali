@@ -1356,7 +1356,9 @@ pub mod blake2b {
             for v in vectors {
                 let mut state = Multipart::new(DIGEST_LENGTH_DEFAULT)?;
                 state.update(&v.0);
+                #[cfg(feature = "std")]
                 let state_b = state.try_clone()?;
+                #[cfg(feature = "std")]
                 assert!(state_b.compare(&v.1)?);
                 let mut digest = [0u8; DIGEST_LENGTH_DEFAULT];
                 state.calculate(&mut digest)?;
@@ -1367,7 +1369,9 @@ pub mod blake2b {
                     let boundary = random::random_u32_in_range(0, v.0.len() as u32)? as usize;
                     state.update(&v.0[..boundary]);
                     state.update(&v.0[boundary..]);
+                    #[cfg(feature = "std")]
                     let state_b = state.try_clone()?;
+                    #[cfg(feature = "std")]
                     assert!(state_b.compare(&v.1)?);
                     let mut digest = [0u8; DIGEST_LENGTH_DEFAULT];
                     state.calculate(&mut digest)?;
@@ -1380,7 +1384,9 @@ pub mod blake2b {
                     state.update(&v.0[..boundary_a]);
                     state.update(&v.0[boundary_a..boundary_b]);
                     state.update(&v.0[boundary_b..]);
+                    #[cfg(feature = "std")]
                     let state_b = state.try_clone()?;
+                    #[cfg(feature = "std")]
                     assert!(state_b.compare(&v.1)?);
                     let mut digest = [0u8; DIGEST_LENGTH_DEFAULT];
                     state.calculate(&mut digest)?;
@@ -1509,7 +1515,9 @@ pub mod blake2b {
             for v in vectors {
                 let mut state = Multipart::new_keyed(DIGEST_LENGTH_DEFAULT, &key)?;
                 state.update(&v.0);
+                #[cfg(feature = "std")]
                 let state_b = state.try_clone()?;
+                #[cfg(feature = "std")]
                 assert!(state_b.compare(&v.1)?);
                 let mut digest = [0u8; DIGEST_LENGTH_DEFAULT];
                 state.calculate(&mut digest)?;
@@ -1520,7 +1528,9 @@ pub mod blake2b {
                     let boundary = random::random_u32_in_range(0, v.0.len() as u32)? as usize;
                     state.update(&v.0[..boundary]);
                     state.update(&v.0[boundary..]);
+                    #[cfg(feature = "std")]
                     let state_b = state.try_clone()?;
+                    #[cfg(feature = "std")]
                     assert!(state_b.compare(&v.1)?);
                     let mut digest = [0u8; DIGEST_LENGTH_DEFAULT];
                     state.calculate(&mut digest)?;
@@ -1533,7 +1543,9 @@ pub mod blake2b {
                     state.update(&v.0[..boundary_a]);
                     state.update(&v.0[boundary_a..boundary_b]);
                     state.update(&v.0[boundary_b..]);
+                    #[cfg(feature = "std")]
                     let state_b = state.try_clone()?;
+                    #[cfg(feature = "std")]
                     assert!(state_b.compare(&v.1)?);
                     let mut digest = [0u8; DIGEST_LENGTH_DEFAULT];
                     state.calculate(&mut digest)?;

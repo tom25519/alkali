@@ -266,8 +266,10 @@ macro_rules! pbkdf_module_common {
         $pwhash_verify:path,    // crypto_pwhash_str_verify
         $str_needs_rehash:path, // crypto_pwhash_str_needs_rehash
     ) => {
-        use $crate::hash::pbkdf::{PasswordHashError, RehashResult};
-        use $crate::{random, require_init, unexpected_err, AlkaliError};
+        use $crate::hash::pbkdf::PasswordHashError;
+        #[cfg(feature = "std")]
+        use $crate::hash::pbkdf::RehashResult;
+        use $crate::{random, require_init, AlkaliError};
 
         /// The minimum value for the operations limit.
         pub const OPS_LIMIT_MIN: usize = $opslim_min as usize;
@@ -533,7 +535,7 @@ macro_rules! pbkdf_module_common {
                 -1 => Ok(RehashResult::InvalidHash),
                 0 => Ok(RehashResult::ParametersMatch),
                 1 => Ok(RehashResult::ParametersDiffer),
-                _ => unexpected_err!(stringify!($str_needs_rehash)),
+                _ => $crate::unexpected_err!(stringify!($str_needs_rehash)),
             }
         }
     };

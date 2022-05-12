@@ -199,7 +199,7 @@
 
 crate::error_type! {
     /// Error type returned if something went wrong in the `asymmetric::cipher` module.
-    CipherError {
+    AsymmetricCipherError {
         /// The output buffer is too short to store the ciphertext/plaintext which would result from
         /// encrypting/decrypting this message.
         ///
@@ -250,7 +250,7 @@ macro_rules! cipher_module {
         $encrypt_d_afternm:path,    // crypto_box_detached_afternm
         $decrypt_d_afternm:path,    // crypto_box_open_detached_afternm
     ) => {
-        use $crate::asymmetric::cipher::CipherError;
+        use $crate::asymmetric::cipher::AsymmetricCipherError;
         use $crate::{assert_not_err, mem, random, require_init, AlkaliError};
 
         /// The length of a private key for asymmetric AE, in bytes.
@@ -528,7 +528,7 @@ macro_rules! cipher_module {
                 if kx_result == 0 {
                     Ok(session_key)
                 } else {
-                    Err(CipherError::PublicKeyUnacceptable.into())
+                    Err(AsymmetricCipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -571,9 +571,9 @@ macro_rules! cipher_module {
                 let c_len = message.len() + MAC_LENGTH;
 
                 if output.len() < c_len {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err(CipherError::MessageTooLong.into());
+                    return Err(AsymmetricCipherError::MessageTooLong.into());
                 }
 
                 let nonce = match nonce {
@@ -615,7 +615,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok((c_len, nonce))
                 } else {
-                    Err(CipherError::PublicKeyUnacceptable.into())
+                    Err(AsymmetricCipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -644,13 +644,13 @@ macro_rules! cipher_module {
                 require_init()?;
 
                 if ciphertext.len() < MAC_LENGTH {
-                    return Err(CipherError::DecryptionFailed.into());
+                    return Err(AsymmetricCipherError::DecryptionFailed.into());
                 }
 
                 let m_len = ciphertext.len() - MAC_LENGTH;
 
                 if output.len() < m_len {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -686,7 +686,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(m_len)
                 } else {
-                    Err(CipherError::DecryptionFailed.into())
+                    Err(AsymmetricCipherError::DecryptionFailed.into())
                 }
             }
 
@@ -728,9 +728,9 @@ macro_rules! cipher_module {
                 require_init()?;
 
                 if output.len() < message.len() {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err(CipherError::MessageTooLong.into());
+                    return Err(AsymmetricCipherError::MessageTooLong.into());
                 }
 
                 let nonce = match nonce {
@@ -776,7 +776,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok((message.len(), nonce, mac))
                 } else {
-                    Err(CipherError::PublicKeyUnacceptable.into())
+                    Err(AsymmetricCipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -808,7 +808,7 @@ macro_rules! cipher_module {
                 require_init()?;
 
                 if output.len() < ciphertext.len() {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -847,7 +847,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(ciphertext.len())
                 } else {
-                    Err(CipherError::DecryptionFailed.into())
+                    Err(AsymmetricCipherError::DecryptionFailed.into())
                 }
             }
         }
@@ -890,9 +890,9 @@ macro_rules! cipher_module {
                 let c_len = message.len() + MAC_LENGTH;
 
                 if output.len() < c_len {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err(CipherError::MessageTooLong.into());
+                    return Err(AsymmetricCipherError::MessageTooLong.into());
                 }
 
                 let nonce = match nonce {
@@ -930,7 +930,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok((c_len, nonce))
                 } else {
-                    Err(CipherError::PublicKeyUnacceptable.into())
+                    Err(AsymmetricCipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -957,13 +957,13 @@ macro_rules! cipher_module {
                 require_init()?;
 
                 if ciphertext.len() < MAC_LENGTH {
-                    return Err(CipherError::DecryptionFailed.into());
+                    return Err(AsymmetricCipherError::DecryptionFailed.into());
                 }
 
                 let m_len = ciphertext.len() - MAC_LENGTH;
 
                 if output.len() < m_len {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -996,7 +996,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(m_len)
                 } else {
-                    Err(CipherError::DecryptionFailed.into())
+                    Err(AsymmetricCipherError::DecryptionFailed.into())
                 }
             }
 
@@ -1036,9 +1036,9 @@ macro_rules! cipher_module {
                 require_init()?;
 
                 if output.len() < message.len() {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 } else if message.len() > *MESSAGE_LENGTH_MAX {
-                    return Err(CipherError::MessageTooLong.into());
+                    return Err(AsymmetricCipherError::MessageTooLong.into());
                 }
 
                 let nonce = match nonce {
@@ -1080,7 +1080,7 @@ macro_rules! cipher_module {
                 if encrypt_result == 0 {
                     Ok((message.len(), nonce, mac))
                 } else {
-                    Err(CipherError::PublicKeyUnacceptable.into())
+                    Err(AsymmetricCipherError::PublicKeyUnacceptable.into())
                 }
             }
 
@@ -1110,7 +1110,7 @@ macro_rules! cipher_module {
                 require_init()?;
 
                 if output.len() < ciphertext.len() {
-                    return Err(CipherError::OutputInsufficient.into());
+                    return Err(AsymmetricCipherError::OutputInsufficient.into());
                 }
 
                 let decrypt_result = unsafe {
@@ -1145,7 +1145,7 @@ macro_rules! cipher_module {
                 if decrypt_result == 0 {
                     Ok(ciphertext.len())
                 } else {
-                    Err(CipherError::DecryptionFailed.into())
+                    Err(AsymmetricCipherError::DecryptionFailed.into())
                 }
             }
         }

@@ -122,7 +122,7 @@
 
 crate::error_type! {
     /// Error type returned if something went wrong in the `symmetric::cipher` module.
-    CipherError {
+    SymmetricCipherError {
         /// The output buffer is too short to store the ciphertext/plaintext which would result
         /// from encrypting/decrypting this message.
         ///
@@ -159,7 +159,7 @@ macro_rules! cipher_module {
         $encrypt_d:path,    // crypto_secretbox_detached
         $decrypt_d:path,    // crypto_secretbox_open_detached
     ) => {
-        use $crate::symmetric::cipher::CipherError;
+        use $crate::symmetric::cipher::SymmetricCipherError;
         use $crate::{assert_not_err, mem, random, require_init, AlkaliError};
 
         /// The length of a symmetric key used for encryption/decryption, in bytes.
@@ -281,9 +281,9 @@ macro_rules! cipher_module {
             let c_len = message.len() + MAC_LENGTH;
 
             if output.len() < c_len {
-                return Err(CipherError::OutputInsufficient.into());
+                return Err(SymmetricCipherError::OutputInsufficient.into());
             } else if message.len() > *MESSAGE_LENGTH_MAX {
-                return Err(CipherError::MessageTooLong.into());
+                return Err(SymmetricCipherError::MessageTooLong.into());
             }
 
             let nonce = match nonce {
@@ -344,13 +344,13 @@ macro_rules! cipher_module {
             require_init()?;
 
             if ciphertext.len() < MAC_LENGTH {
-                return Err(CipherError::DecryptionFailed.into());
+                return Err(SymmetricCipherError::DecryptionFailed.into());
             }
 
             let m_len = ciphertext.len() - MAC_LENGTH;
 
             if output.len() < m_len {
-                return Err(CipherError::OutputInsufficient.into());
+                return Err(SymmetricCipherError::OutputInsufficient.into());
             }
 
             let decrypt_result = unsafe {
@@ -382,7 +382,7 @@ macro_rules! cipher_module {
             if decrypt_result == 0 {
                 Ok(m_len)
             } else {
-                Err(CipherError::DecryptionFailed.into())
+                Err(SymmetricCipherError::DecryptionFailed.into())
             }
         }
 
@@ -426,9 +426,9 @@ macro_rules! cipher_module {
             require_init()?;
 
             if output.len() < message.len() {
-                return Err(CipherError::OutputInsufficient.into());
+                return Err(SymmetricCipherError::OutputInsufficient.into());
             } else if message.len() > *MESSAGE_LENGTH_MAX {
-                return Err(CipherError::MessageTooLong.into());
+                return Err(SymmetricCipherError::MessageTooLong.into());
             }
 
             let nonce = match nonce {
@@ -497,7 +497,7 @@ macro_rules! cipher_module {
             require_init()?;
 
             if output.len() < ciphertext.len() {
-                return Err(CipherError::OutputInsufficient.into());
+                return Err(SymmetricCipherError::OutputInsufficient.into());
             }
 
             let decrypt_result = unsafe {
@@ -531,7 +531,7 @@ macro_rules! cipher_module {
             if decrypt_result == 0 {
                 Ok(ciphertext.len())
             } else {
-                Err(CipherError::DecryptionFailed.into())
+                Err(SymmetricCipherError::DecryptionFailed.into())
             }
         }
     };

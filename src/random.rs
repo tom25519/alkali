@@ -104,9 +104,18 @@ impl RngCore for SodiumRng {
         self.try_fill_bytes(dest).unwrap();
     }
 
+    #[cfg(feature = "std")]
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), RandError> {
-        fill_random(dest).map_err(RandError::new)?;
-        Ok(())
+        fill_random(dest).map_err(RandError::new)
+    }
+
+    #[cfg(not(feature = "std"))]
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), RandError> {
+        fill_random(dest).map_err(|_| {
+            core::num::NonZeroU32::new(RandError::CUSTOM_START)
+                .unwrap()
+                .into()
+        })
     }
 }
 
