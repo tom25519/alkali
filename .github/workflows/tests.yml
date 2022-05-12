@@ -59,8 +59,8 @@ jobs:
           toolchain: nightly
           override: true
       - uses: Swatinem/rust-cache@v1
-      - run: cargo test --no-default-features
-      - run: cargo test --release --no-default-features
+      - run: cargo test --lib --no-default-features
+      - run: cargo test --lib --release --no-default-features
 
   stable:
     runs-on: ubuntu-latest
