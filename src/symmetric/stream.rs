@@ -53,23 +53,21 @@
 //! decryption via [`util::unpad`](crate::util::unpad).
 
 use crate::AlkaliError;
-use thiserror::Error;
 
-/// Error type returned if something went wrong in the `symmetric::stream` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum StreamCipherError {
-    /// The output buffer is too short to store the ciphertext/plaintext which would result from
-    /// encrypting/decrypting this message.
-    #[error("the output is insufficient to store the ciphertext/plaintext")]
-    OutputInsufficient,
+crate::error_type! {
+    /// Error type returned if something went wrong in the `symmetric::stream` module.
+    StreamCipherError {
+        /// The output buffer is too short to store the ciphertext/plaintext which would result from
+        /// encrypting/decrypting this message.
+        OutputInsufficient,
 
-    /// Message too long to encrypt/decrypt with this cipher.
-    ///
-    /// Beyond a certain point, the keystream of the cipher is exhausted, and it can no longer be
-    /// used to safely encrypt messages. Therefore, this error is returned if the message provided
-    /// is too long. Messages can be at most [`struct@MESSAGE_LENGTH_MAX`] bytes.
-    #[error("the message is too long for encryption/decryption with this cipher")]
-    MessageTooLong,
+        /// Message too long to encrypt/decrypt with this cipher.
+        ///
+        /// Beyond a certain point, the keystream of the cipher is exhausted, and it can no longer
+        /// be used to safely encrypt messages. Therefore, this error is returned if the message
+        /// provided is too long. Messages can be at most [`struct@MESSAGE_LENGTH_MAX`] bytes.
+        MessageTooLong,
+    }
 }
 
 /// Treat `nonce` as a little-endian unsigned integer, and increment it by one.

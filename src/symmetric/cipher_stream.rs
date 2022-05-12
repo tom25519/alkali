@@ -106,36 +106,31 @@
 //! File encryption: See
 //! [`examples/file-encryption.rs`](https://github.com/tom25519/alkali/blob/main/examples/file-encryption.rs)
 
-use thiserror::Error;
+crate::error_type! {
+    /// Error type returned if something went wrong in the `symmetric::cipher_stream` module.
+    CipherStreamError {
+        /// The output buffer is too short to store the ciphertext/plaintext which would result from
+        /// encrypting/decrypting this message.
+        ///
+        /// Each function in this module should provide information in its documentation about the
+        /// output length requirements.
+        OutputInsufficient,
 
-/// Error type returned if something went wrong in the `symmetric::cipher_stream` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum CipherStreamError {
-    /// The output buffer is too short to store the ciphertext/plaintext which would result from
-    /// encrypting/decrypting this message.
-    ///
-    /// Each function in this module should provide information in its documentation about the
-    /// output length requirements.
-    #[error("the output is insufficient to store ciphertext/plaintext")]
-    OutputInsufficient,
+        /// Message too long for encryption/decryption with this API.
+        ///
+        /// An individual message can only be up to
+        /// [`MESSAGE_LENGTH_MAX`](struct@MESSAGE_LENGTH_MAX) bytes before the keystream is
+        /// exhausted. Longer messages should be split into multiple chunks.
+        MessageTooLong,
 
-    /// Message too long for encryption/decryption with this API.
-    ///
-    /// An individual message can only be up to [`MESSAGE_LENGTH_MAX`](struct@MESSAGE_LENGTH_MAX)
-    /// bytes before the keystream is exhausted. Longer messages should be split into multiple
-    /// chunks.
-    #[error("the message is too long for encryption/decryption with this API")]
-    MessageTooLong,
+        /// Tried to write to/read from a stream where a message with the "FINAL" tag has been sent.
+        StreamFinalised,
 
-    /// Tried to write to/read from a stream where a message with the "FINAL" tag has been sent.
-    #[error("the final message in this stream has been sent, it can no longer be used")]
-    StreamFinalised,
-
-    /// Indicates decryption of the stream failed.
-    ///
-    /// This could indicate an attempted forgery, or transmission error.
-    #[error("decryption failed")]
-    DecryptionFailed,
+        /// Indicates decryption of the stream failed.
+        ///
+        /// This could indicate an attempted forgery, or transmission error.
+        DecryptionFailed,
+    }
 }
 
 pub mod xchacha20poly1305 {

@@ -26,39 +26,35 @@ pub mod ed25519;
 #[cfg_attr(doc_cfg, doc(cfg(not(feature = "minimal"))))]
 pub mod ristretto255;
 
-use thiserror::Error;
+crate::error_type! {
+    /// Error type returned if something went wrong in the `curve` module.
+    CurveError {
+        /// The given point/scalar cannot be scalar multiplied with this API.
+        ///
+        /// For Curve25519, this indicates the point is of low order: Performing a key exchange with
+        /// this point could leak the secret key.
+        ///
+        /// For Ed25519, this could indicate a number of issues: The scalar could be zero, the point
+        /// could be of low order, the point could not be on the curve at all, or the point may not
+        /// be provided in canonical form.
+        ///
+        /// For Ristretto255, this indicates the calculated product is the identity element or that
+        /// the scalar is zero.
+        ScalarMultUnacceptable,
 
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum CurveError {
-    /// The given point/scalar cannot be scalar multiplied with this API.
-    ///
-    /// For Curve25519, this indicates the point is of low order: Performing a key exchange with
-    /// this point could leak the secret key.
-    ///
-    /// For Ed25519, this could indicate a number of issues: The scalar could be zero, the point
-    /// could be of low order, the point could not be on the curve at all, or the point may not be
-    /// provided in canonical form.
-    ///
-    /// For Ristretto255, this indicates the calculated product is the identity element or that the
-    /// scalar is zero.
-    #[error("scalar multiplication cannot be performed safely with this point/scalar")]
-    ScalarMultUnacceptable,
+        /// One of the given points is not a valid representation of a point on the curve.
+        InvalidPoint,
 
-    /// One of the given points is not a valid representation of a point on the curve.
-    #[error("an argument to group operation is not a valid point on the curve")]
-    InvalidPoint,
+        /// Could not invert the provided scalar.
+        ///
+        /// You cannot invert a scalar if it is zero, as there does not exist a value `n` such that
+        /// `0n` is congruent to `1`.
+        InversionFailed,
 
-    /// Could not invert the provided scalar.
-    ///
-    /// You cannot invert a scalar if it is zero, as there does not exist a value `n` such that `0n`
-    /// is congruent to `1`.
-    #[error("cannot invert the provided scalar")]
-    InversionFailed,
-
-    /// Could not convert the provided Ed25519 point to a Curve25519 point.
-    ///
-    /// Only points on the main (prime-order) subgroup of the Ed25519 curve can be converted to
-    /// points on Curve25519.
-    #[error("cannot convert this point on Ed25519 to a point on Curve25519")]
-    ConversionFailed,
+        /// Could not convert the provided Ed25519 point to a Curve25519 point.
+        ///
+        /// Only points on the main (prime-order) subgroup of the Ed25519 curve can be converted to
+        /// points on Curve25519.
+        ConversionFailed,
+    }
 }

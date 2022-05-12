@@ -181,8 +181,6 @@
 //! A longer example involving file encryption is available in
 //! [`examples/file_encryption.rs`](https://github.com/tom25519/alkali/blob/main/examples/file-encryption.rs).
 
-use thiserror::Error;
-
 pub mod argon2i;
 pub mod argon2id;
 #[cfg(not(feature = "minimal"))]
@@ -191,45 +189,42 @@ pub mod scrypt;
 
 pub use argon2id::*;
 
-/// Error type returned if something went wrong in the pbkdf module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum PasswordHashError {
-    /// The password provided was too short or too long for use with this algorithm.
-    ///
-    /// Passwords must be at least [`PASSWORD_LENGTH_MIN`] and at most
-    /// [`PASSWORD_LENGTH_MAX`](struct@PASSWORD_LENGTH_MAX) bytes.
-    #[error("password length outside acceptable range")]
-    PasswordLengthInvalid,
+crate::error_type! {
+    /// Error type returned if something went wrong in the `pbkdf` module.
+    PasswordHashError {
+        /// The password provided was too short or too long for use with this algorithm.
+        ///
+        /// Passwords must be at least [`PASSWORD_LENGTH_MIN`] and at most
+        /// [`PASSWORD_LENGTH_MAX`](struct@PASSWORD_LENGTH_MAX) bytes.
+        PasswordLengthInvalid,
 
-    /// The operations limit was smaller than [`OPS_LIMIT_MIN`] or greater than [`OPS_LIMIT_MAX`].
-    #[error("operations limit outside acceptable range")]
-    OpsLimitInvalid,
+        /// The operations limit was smaller than [`OPS_LIMIT_MIN`] or greater than
+        /// [`OPS_LIMIT_MAX`].
+        OpsLimitInvalid,
 
-    /// The memory limit was smaller than [`MEM_LIMIT_MIN`] or greater than
-    /// [`MEM_LIMIT_MAX`](struct@MEM_LIMIT_MAX).
-    #[error("memory limit outside acceptable range")]
-    MemLimitInvalid,
+        /// The memory limit was smaller than [`MEM_LIMIT_MIN`] or greater than
+        /// [`MEM_LIMIT_MAX`](struct@MEM_LIMIT_MAX).
+        MemLimitInvalid,
 
-    /// The requested output is too short or too long for use with this algorithm.
-    ///
-    /// The derived key size must be at least [`OUTPUT_LENGTH_MIN`] bytes and at most
-    /// [`OUTPUT_LENGTH_MAX`](struct@OUTPUT_LENGTH_MAX) bytes.
-    #[error("requested output length is too short or too long")]
-    OutputLengthInvalid,
+        /// The requested output is too short or too long for use with this algorithm.
+        ///
+        /// The derived key size must be at least [`OUTPUT_LENGTH_MIN`] bytes and at most
+        /// [`OUTPUT_LENGTH_MAX`](struct@OUTPUT_LENGTH_MAX) bytes.
+        OutputLengthInvalid,
 
-    /// The password hash failed.
-    ///
-    /// This may indicate there is insufficient memory available for the memory limit you specified.
-    #[error("password hash failed")]
-    PasswordHashFailed,
+        /// The password hash failed.
+        ///
+        /// This may indicate there is insufficient memory available for the memory limit you
+        /// specified.
+        PasswordHashFailed,
 
-    /// The password verification against the provided hash failed.
-    ///
-    /// This indicates that the password was incorrect for this hash, or potentially that
-    /// calculating the hash failed, although this is unlikely in comparison to the former
-    /// possibility. In any case, the user should not be allowed to log in.
-    #[error("the password was incorrect for this hash")]
-    PasswordIncorrect,
+        /// The password verification against the provided hash failed.
+        ///
+        /// This indicates that the password was incorrect for this hash, or potentially that
+        /// calculating the hash failed, although this is unlikely in comparison to the former
+        /// possibility. In any case, the user should not be allowed to log in.
+        PasswordIncorrect,
+    }
 }
 
 /// Possible results of [`requires_rehash`].

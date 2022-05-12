@@ -98,15 +98,13 @@
 //! // here should be equal to the `tx` key calculated by the client.
 //! ```
 
-use thiserror::Error;
-
-/// Error type returned if something went wrong in the `kx` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum KeyExchangeError {
-    /// The other party's keypair is unacceptable, and should not be used for cryptographic
-    /// purposes.
-    #[error("the other party's public key is unacceptable")]
-    PublicKeyUnacceptable,
+crate::error_type! {
+    /// Error type returned if something went wrong in the `kx` module.
+    KeyExchangeError {
+        /// The other party's keypair is unacceptable, and should not be used for cryptographic
+        /// purposes.
+        PublicKeyUnacceptable,
+    }
 }
 
 /// The [X25519](https://cr.yp.to/ecdh.html) key exchange, together with the

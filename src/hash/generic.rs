@@ -111,32 +111,28 @@
 
 // TODO: Consider how/if we wish to expose the salt/personalisation parameters of the hash.
 
-use thiserror::Error;
+crate::error_type! {
+    /// Error type returned if something went wrong in the `generic` module.
+    GenericHashError {
+        /// The desired digest length was too short or too long for use with this algorithm.
+        ///
+        /// The output size of this hash must be at least [`DIGEST_LENGTH_MIN`], and at most
+        /// [`DIGEST_LENGTH_MAX`] bytes. A minimum of [`DIGEST_LENGTH_DEFAULT`] should be used if
+        /// collisions should be avoided, which is generally a necessary property for a
+        /// cryptographic hash function to have any utility.
+        DigestLengthInvalid,
 
-/// Error type returned if something went wrong in the generic module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum GenericHashError {
-    /// The desired digest length was too short or too long for use with this algorithm.
-    ///
-    /// The output size of this hash must be at least [`DIGEST_LENGTH_MIN`], and at most
-    /// [`DIGEST_LENGTH_MAX`] bytes. A minimum of [`DIGEST_LENGTH_DEFAULT`] should be used if
-    /// collisions should be avoided, which is generally a necessary property for a cryptographic
-    /// hash function to have any utility.
-    #[error("digest length outside acceptable range")]
-    DigestLengthInvalid,
+        /// The output buffer size for [`Multipart::calculate`] differs from the output length
+        /// specified in [`Multipart::new`] or [`Multipart::new_keyed`].
+        OutputLengthChanged,
 
-    /// The output buffer size for [`Multipart::calculate`] differs from the output length
-    /// specified in [`Multipart::new`] or [`Multipart::new_keyed`].
-    #[error("output length changed from length specified on instantiation")]
-    OutputLengthChanged,
-
-    /// The provided key was too long for use with this algorithm.
-    ///
-    /// A key for use with this hash must be at most [`KEY_LENGTH_MAX`] bytes. Using a key size of
-    /// [`KEY_LENGTH_DEFAULT`] is recommended, and a key shorter than [`KEY_LENGTH_MIN`] should not
-    /// be used if it is intended to be a secret value.
-    #[error("key length outsize acceptable range")]
-    KeyLengthInvalid,
+        /// The provided key was too long for use with this algorithm.
+        ///
+        /// A key for use with this hash must be at most [`KEY_LENGTH_MAX`] bytes. Using a key size
+        /// of [`KEY_LENGTH_DEFAULT`] is recommended, and a key shorter than [`KEY_LENGTH_MIN`]
+        /// should not be used if it is intended to be a secret value.
+        KeyLengthInvalid,
+    }
 }
 
 /// The [BLAKE2b](https://www.blake2.net) hash function.

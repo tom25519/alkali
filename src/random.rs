@@ -45,7 +45,6 @@
 use crate::{mem, require_init, AlkaliError};
 use libsodium_sys as sodium;
 use rand_core::{impls, CryptoRng, Error as RandError, RngCore};
-use thiserror::Error;
 
 /// The length of a seed for use with [`fill_random_from_seed`].
 pub const SEED_LENGTH: usize = sodium::randombytes_SEEDBYTES as usize;
@@ -67,20 +66,20 @@ mem::hardened_buffer! {
     pub Seed(SEED_LENGTH)
 }
 
-/// Error type returned if something went wrong in the random module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum RandomError {
-    /// Tried to generate too much random data for a given seed.
-    ///
-    /// For a specific seed, it is only safe to generate up to 2^38 bytes (=256 GiB) of
-    /// pseudo-random data before the output of the RNG may become predictable. This should only be
-    /// possible if you are specifying a seed to use for deterministic random number generation.
-    #[error("too much random data requested for given seed")]
-    SeedExhausted,
+crate::error_type! {
+    /// Error type returned if something went wrong in the random module.
+    RandomError {
+        /// Tried to generate too much random data for a given seed.
+        ///
+        /// For a specific seed, it is only safe to generate up to 2^38 bytes (=256 GiB) of
+        /// pseudo-random data before the output of the RNG may become predictable. This should only
+        /// be possible if you are specifying a seed to use for deterministic random number
+        /// generation.
+        SeedExhausted,
 
-    /// Tried to call [`random_u32_in_range`] with `low` > `high`.
-    #[error("the lower bound for random_u32_in_range must be lower than the upper bound")]
-    BoundsInvalid,
+        /// Tried to call [`random_u32_in_range`] with `low` > `high`.
+        BoundsInvalid,
+    }
 }
 
 /// [rand](https://rust-random.github.io/book)-compatible CSPRNG API.

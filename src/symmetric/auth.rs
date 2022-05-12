@@ -106,20 +106,18 @@
 // TODO: The multipart API in Sodium supports variable-length keys. We should consider support for
 // this.
 
-use thiserror::Error;
-
-/// Error type returned if something went wrong in the `auth` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum AuthError {
-    /// Failed to authenticate a message.
-    ///
-    /// The provided tag is not correct for this message + key.
-    ///
-    /// This may indicate an attempted forgery, a transmission error, or that you're using a
-    /// different key to the one used by the message sender. In any case, the authenticity of the
-    /// message can't be verified, and it should not be trusted.
-    #[error("authentication failed")]
-    AuthenticationFailed,
+crate::error_type! {
+    /// Error type returned if something went wrong in the `auth` module.
+    AuthError {
+        /// Failed to authenticate a message.
+        ///
+        /// The provided tag is not correct for this message + key.
+        ///
+        /// This may indicate an attempted forgery, a transmission error, or that you're using a
+        /// different key to the one used by the message sender. In any case, the authenticity of
+        /// the message can't be verified, and it should not be trusted.
+        AuthenticationFailed,
+    }
 }
 
 /// Generates the API for an `auth` module with the given functions from Sodium for a specific

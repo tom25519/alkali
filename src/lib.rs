@@ -129,6 +129,10 @@ pub mod random;
 pub mod symmetric;
 pub mod util;
 
+pub use sodium::{
+    SODIUM_LIBRARY_VERSION_MAJOR, SODIUM_LIBRARY_VERSION_MINOR, SODIUM_VERSION_STRING,
+};
+
 /// General error type used in alkali.
 ///
 /// This type is returned by functions which can possibly fail throughout alkali.
@@ -249,9 +253,46 @@ pub enum AlkaliError {
     StreamCipherError(#[from] symmetric::stream::StreamCipherError),
 }
 
-pub use sodium::{
-    SODIUM_LIBRARY_VERSION_MAJOR, SODIUM_LIBRARY_VERSION_MINOR, SODIUM_VERSION_STRING,
-};
+/// Implement an error enum.
+macro_rules! error_type {
+    (
+        $(#[$tymeta:meta])*
+        $name:ident {
+            $(
+                $(#[$varmeta:meta])*
+                $varname:ident,
+            )*
+        }
+    ) => {
+        $(#[$tymeta])*
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub enum $name {
+            $(
+                $(#[$varmeta])*
+                $varname,
+            )*
+        }
+
+        #[cfg(feature = "std")]
+        impl std::error::Error for $name {}
+
+        impl core::fmt::Display for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                match self {
+                    $(
+                        Self::$varname => {
+                            f.write_str(stringify!($name))?;
+                            f.write_str("::")?;
+                            f.write_str(stringify!($varname))
+                        }
+                    )*
+                }
+            }
+        }
+    }
+}
+
+pub(crate) use error_type;
 
 /// Used where Sodium returns an error which we didn't expect.
 ///

@@ -145,28 +145,26 @@
 //! assert!(state.verify(&signature, &public_key).is_ok());
 //! ```
 
-use thiserror::Error;
+crate::error_type! {
+    /// Error type returned if something went wrong in the `sign` module.
+    SignError {
+        /// Failed to authenticate a message.
+        ///
+        /// The provided signature is not correct for this message + public key.
+        ///
+        /// This may indicate an attempted forgery, a transmission error, or that the private key
+        /// used to sign this message doesn't correspond to the public key being used to verify it.
+        /// In any case, the authenticity of the message can't be verified, and it should not be
+        /// trusted.
+        InvalidSignature,
 
-/// Error type returned if something went wrong in the `sign` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum SignError {
-    /// Failed to authenticate a message.
-    ///
-    /// The provided signature is not correct for this message + public key.
-    ///
-    /// This may indicate an attempted forgery, a transmission error, or that the private key used
-    /// to sign this message doesn't correspond to the public key being used to verify it. In any
-    /// case, the authenticity of the message can't be verified, and it should not be trusted.
-    #[error("the provided signature was invalid for the given message")]
-    InvalidSignature,
-
-    /// The output buffer provided was insufficient to store the signed message.
-    ///
-    /// When signing a message in combined mode, the output must be at least the length of the
-    /// original message plus [`SIGNATURE_LENGTH`] bytes, to allow for the signature to be
-    /// prepended.
-    #[error("the output buffer provided was insufficient")]
-    OutputInsufficient,
+        /// The output buffer provided was insufficient to store the signed message.
+        ///
+        /// When signing a message in combined mode, the output must be at least the length of the
+        /// original message plus [`SIGNATURE_LENGTH`] bytes, to allow for the signature to be
+        /// prepended.
+        OutputInsufficient,
+    }
 }
 
 /// The [Ed25519](https://ed25519.cr.yp.to/) signature scheme.

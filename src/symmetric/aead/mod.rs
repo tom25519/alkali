@@ -64,8 +64,6 @@
 //! padding to the plaintext prior to encryption via [`util::pad`](crate::util::pad), and remove it
 //! following decryption via [`util::unpad`](crate::util::unpad).
 
-use thiserror::Error;
-
 #[cfg(feature = "aes")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "aes")))]
 pub mod aes256gcm;
@@ -77,33 +75,30 @@ pub mod chacha20poly1305;
 pub mod chacha20poly1305_ietf;
 pub mod xchacha20poly1305_ietf;
 
-/// Error type returned if something went wrong in the `symmetric::aead` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum AEADError {
-    /// The output buffer is too short to store the ciphertext/plaintext which would result from
-    /// encrypting/decrypting this message.
-    ///
-    /// Each function in this module should provide information in its documentation about the
-    /// output length requirements.
-    #[error("the output is insufficient to store ciphertext/plaintext")]
-    OutputInsufficient,
+crate::error_type! {
+    /// Error type returned if something went wrong in the `symmetric::aead` module.
+    AEADError {
+        /// The output buffer is too short to store the ciphertext/plaintext which would result from
+        /// encrypting/decrypting this message.
+        ///
+        /// Each function in this module should provide information in its documentation about the
+        /// output length requirements.
+        OutputInsufficient,
 
-    /// Message too long for use with this cipher.
-    #[error("the message is too long for encryption/decryption with this cipher")]
-    MessageTooLong,
+        /// Message too long for use with this cipher.
+        MessageTooLong,
 
-    /// Indicates decryption of a provided ciphertext failed.
-    ///
-    /// This could indicate an attempted forgery, or transmission error.
-    #[error("decryption failed")]
-    DecryptionFailed,
+        /// Indicates decryption of a provided ciphertext failed.
+        ///
+        /// This could indicate an attempted forgery, or transmission error.
+        DecryptionFailed,
 
-    /// This system does not support the necessary CPU features for AES support.
-    ///
-    /// AES is only available on x86 systems with SSSE3 extensions, and the `aesni` and `pclmul`
-    /// instructions.
-    #[error("AES is not available on this platform")]
-    AESUnavailable,
+        /// This system does not support the necessary CPU features for AES support.
+        ///
+        /// AES is only available on x86 systems with SSSE3 extensions, and the `aesni` and `pclmul`
+        /// instructions.
+        AESUnavailable,
+    }
 }
 
 #[allow(unused_macros)]

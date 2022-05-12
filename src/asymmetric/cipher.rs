@@ -197,37 +197,33 @@
 //! assert_eq!(&plaintext, MESSAGE.as_bytes());
 //! ```
 
-use thiserror::Error;
+crate::error_type! {
+    /// Error type returned if something went wrong in the `asymmetric::cipher` module.
+    CipherError {
+        /// The output buffer is too short to store the ciphertext/plaintext which would result from
+        /// encrypting/decrypting this message.
+        ///
+        /// Each function in this module should provide information in its documentation about the
+        /// output length requirements.
+        OutputInsufficient,
 
-/// Error type returned if something went wrong in the `asymmetric::cipher` module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum CipherError {
-    /// The output buffer is too short to store the ciphertext/plaintext which would result from
-    /// encrypting/decrypting this message.
-    ///
-    /// Each function in this module should provide information in its documentation about the
-    /// output length requirements.
-    #[error("the output is insufficient to store ciphertext/plaintext")]
-    OutputInsufficient,
+        /// Message too long for use with this cipher.
+        ///
+        /// Beyond a certain point, the keystream of the cipher is exhausted, and it can no longer
+        /// be used to safely encrypt message contents. Therefore, this error is returned if the
+        /// message provided is too long. Messages can be at most [`struct@MESSAGE_LENGTH_MAX`]
+        /// bytes.
+        MessageTooLong,
 
-    /// Message too long for use with this cipher.
-    ///
-    /// Beyond a certain point, the keystream of the cipher is exhausted, and it can no longer be
-    /// used to safely encrypt message contents. Therefore, this error is returned if the message
-    /// provided is too long. Messages can be at most [`struct@MESSAGE_LENGTH_MAX`] bytes.
-    #[error("the message is too long for use with this cipher")]
-    MessageTooLong,
+        /// The other party's keypair is unacceptable, and should not be used for cryptographic
+        /// purposes.
+        PublicKeyUnacceptable,
 
-    /// The other party's keypair is unacceptable, and should not be used for cryptographic
-    /// purposes.
-    #[error("the other party's public key is unacceptable")]
-    PublicKeyUnacceptable,
-
-    /// Indicates decryption of a provided ciphertext failed.
-    ///
-    /// This could indicate an attempted forgery, or transmission error.
-    #[error("decryption failed")]
-    DecryptionFailed,
+        /// Indicates decryption of a provided ciphertext failed.
+        ///
+        /// This could indicate an attempted forgery, or transmission error.
+        DecryptionFailed,
+    }
 }
 
 /// Generates the API for an `asymmetric::cipher` module with the given functions from Sodium for a

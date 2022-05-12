@@ -60,21 +60,18 @@
 //! assert_ne!(subkey_a, subkey_d);
 //! ```
 
-use thiserror::Error;
+crate::error_type! {
+    /// Error type returned if something went wrong in the `kdf` module.
+    KDFError {
+        /// The provided context is of the incorrect length: It must be [`CONTEXT_LENGTH`] bytes.
+        ContextLengthIncorrect,
 
-/// Error type returned if something went wrong in the KDF module.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum KDFError {
-    /// The provided context is of the incorrect length: It must be [`CONTEXT_LENGTH`] bytes.
-    #[error("context length is incorrect")]
-    ContextLengthIncorrect,
-
-    /// The requested subkey size is too short or too long for use with this algorithm.
-    ///
-    /// The derived subkey size must be at least [`SUBKEY_LENGTH_MIN`] bytes, and at most
-    /// [`SUBKEY_LENGTH_MAX`] bytes.
-    #[error("subkey length outside acceptable range")]
-    SubkeyLengthInvalid,
+        /// The requested subkey size is too short or too long for use with this algorithm.
+        ///
+        /// The derived subkey size must be at least [`SUBKEY_LENGTH_MIN`] bytes, and at most
+        /// [`SUBKEY_LENGTH_MAX`] bytes.
+        SubkeyLengthInvalid,
+    }
 }
 
 /// Key derivation based on the [BLAKE2b](https://www.blake2.net) hash function.
