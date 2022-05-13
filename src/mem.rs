@@ -419,6 +419,81 @@ macro_rules! hardened_buffer {
                     <core::ptr::NonNull<[u8; $size]> as core::fmt::Pointer>::fmt(&self.ptr, f)
                 }
             }
+
+            #[cfg(feature = "serde")]
+            #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+            impl serde::Serialize for $name {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: serde::Serializer,
+                {
+                    serializer.serialize_bytes(self.as_ref())
+                }
+            }
+
+            #[cfg(feature = "serde")]
+            #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+            impl<'de> serde::Deserialize<'de> for $name {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: serde::Deserializer<'de>,
+                {
+                    struct BufVisitor;
+
+                    impl<'de> serde::de::Visitor<'de> for BufVisitor {
+                        type Value = $name;
+
+                        fn expecting(
+                            &self,
+                            formatter: &mut core::fmt::Formatter
+                        ) -> core::fmt::Result {
+                            formatter.write_str("a byte array of length ")?;
+                            formatter.write_str(stringify!($size))
+                        }
+
+                        fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+                        where
+                            E: serde::de::Error,
+                        {
+                            if v.len() != $size {
+                                return Err(E::invalid_length(v.len(), &self));
+                            }
+                            $name::try_from(v).map_err(E::custom)
+                        }
+
+                        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                        where
+                            A: serde::de::SeqAccess<'de>,
+                        {
+                            use serde::de::Error;
+
+                            if let Some(s) = seq.size_hint() {
+                                if s != $size {
+                                    return Err(A::Error::invalid_length(s, &self));
+                                }
+                            }
+
+                            let mut buf = Self::Value::new_empty().map_err(A::Error::custom)?;
+
+                            for i in 0..$size {
+                                let b = seq.next_element()?;
+                                if b.is_none() {
+                                    return Err(A::Error::invalid_length(i, &self));
+                                }
+                                buf[i] = b.unwrap();
+                            }
+
+                            if seq.next_element::<u8>()?.is_some() {
+                                return Err(A::Error::invalid_length($size + 1, &self));
+                            }
+
+                            Ok(buf)
+                        }
+                    }
+
+                    deserializer.deserialize_bytes(BufVisitor)
+                }
+            }
         )*
     };
 }

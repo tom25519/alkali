@@ -211,6 +211,7 @@ pub mod x25519blake2b {
     /// A ([`PrivateKey`], [`PublicKey`]) keypair, used for key exchange.
     ///
     /// The private key must be kept secret, while the public key can be made public.
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
         pub private_key: PrivateKey,

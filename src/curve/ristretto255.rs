@@ -293,6 +293,7 @@ pub type Hash = [u8; HASH_LENGTH];
 
 /// A point on Ristretto255.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Point(pub [u8; POINT_LENGTH]);
 
 impl Point {

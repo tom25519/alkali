@@ -240,6 +240,7 @@ macro_rules! seal_module {
         /// and there is no security risk in converting between the two.
         ///
         /// The private key must be kept secret, while the public key can be made public.
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct Keypair {
             /// The private key for this keypair.
             pub private_key: PrivateKey,

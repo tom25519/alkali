@@ -70,6 +70,8 @@
 //! APIs will be disabled: Those which require `std` support are marked as such in the
 //! documentation.
 //!
+//! [Serde](https://serde.rs) support can be enabled using the `serde` feature (enabled by default).
+//!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a
 //! custom allocator from Sodium to manage their memory. They can be used like standard array/slice

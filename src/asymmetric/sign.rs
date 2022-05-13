@@ -265,6 +265,7 @@ pub mod ed25519 {
     ///
     /// The private key is used to sign messages, and must be kept secret, while the public key is
     /// used to verify messages, and should be made public.
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
         pub private_key: PrivateKey,
