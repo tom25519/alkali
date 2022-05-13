@@ -15,16 +15,26 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            features: aes alloc hazmat
+            features-release: aes alloc hazmat optimized
           - os: ubuntu-latest
             target: i686-unknown-linux-gnu
             deps: sudo apt update; sudo apt install -y gcc-multilib
+            features: alloc hazmat
+            features-release: alloc hazmat
           - os: macos-latest
             target: x86_64-apple-darwin
+            features: alloc hazmat
+            features-release: alloc hazmat optimized
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            features: aes alloc hazmat
+            features-release: aes alloc hazmat optimized
           - os: windows-latest
             target: x86_64-pc-windows-gnu
             toolchain: nightly-x86_64-pc-windows-gnu
+            features: aes alloc hazmat
+            features-release: aes alloc hazmat optimized
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -35,8 +45,8 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - run: ${{ matrix.deps }}
         if: ${{ matrix.deps }}
-      - run: cargo test --features "aes alloc hazmat" --target ${{ matrix.target }}
-      - run: cargo test --release --features "aes alloc hazmat optimized" --target ${{ matrix.target }}
+      - run: cargo test --features "${{ matrix.features }}" --target ${{ matrix.target }}
+      - run: cargo test --release --features "${{ matrix.features-release }}" --target ${{ matrix.target }}
 
   minimal:
     runs-on: ubuntu-latest
