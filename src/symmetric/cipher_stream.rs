@@ -419,9 +419,6 @@ pub mod xchacha20poly1305 {
             ad: Option<&[u8]>,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
-            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
-            // struct.
-
             self.encrypt_impl(message, ad, output, MessageType::Message)
         }
 
@@ -460,9 +457,6 @@ pub mod xchacha20poly1305 {
             ad: Option<&[u8]>,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
-            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
-            // struct.
-
             self.encrypt_impl(message, ad, output, MessageType::Push)
         }
 
@@ -501,9 +495,6 @@ pub mod xchacha20poly1305 {
             ad: Option<&[u8]>,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
-            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
-            // struct.
-
             self.encrypt_impl(message, ad, output, MessageType::Rekey)
         }
 
@@ -566,9 +557,6 @@ pub mod xchacha20poly1305 {
             ad: Option<&[u8]>,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
-            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
-            // struct.
-
             self.encrypt_impl(message, ad, output, MessageType::Final)
         }
     }
@@ -708,6 +696,9 @@ pub mod xchacha20poly1305 {
             ad: Option<&[u8]>,
             output: &mut [u8],
         ) -> Result<(MessageType, usize), AlkaliError> {
+            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
+            // struct.
+
             if self.finalised {
                 return Err(CipherStreamError::StreamFinalised.into());
             }
@@ -793,6 +784,9 @@ pub mod xchacha20poly1305 {
         /// that this function is called at the same time in the stream as
         /// [`EncryptionStream::rekey`].
         pub fn rekey(&mut self) {
+            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
+            // struct.
+
             unsafe {
                 // SAFETY: The argument to this function should be a pointer to a
                 // `crypto_secretstream_state` struct. The initialisation of the `DecryptionStream`
@@ -809,6 +803,9 @@ pub mod xchacha20poly1305 {
 
     impl Drop for DecryptionStream {
         fn drop(&mut self) {
+            // We do not use `require_init` here, as it must be called to initialise a `Multipart`
+            // struct.
+
             unsafe {
                 // SAFETY:
                 // * Is a double-free possible in safe code?

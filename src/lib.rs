@@ -1,6 +1,3 @@
-//! **Please note**: This is currently a work-in-progress, and isn't yet complete, nor is it
-//! suitable for production usage.
-//!
 //! Safe, idiomatic Rust bindings to the [Sodium](https://libsodium.org) cryptographic library.
 //!
 //! Sodium is a fast, modern cryptographic library written in C. This crate intends to provide a

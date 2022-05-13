@@ -860,7 +860,6 @@ macro_rules! kdf_tests {
         mem: $memlim:expr,
         out: $key:expr,
     }, )* ) => {
-
         #[test]
         fn key_derivation_test_vectors() -> Result<(), $crate::AlkaliError> {
             $(

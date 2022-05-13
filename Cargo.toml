@@ -1,9 +1,9 @@
 [package]
 name = "alkali"
-version = "0.1.0-alpha.10"
+version = "0.1.0"
 authors = ["tom25519 <tom25519@pm.me>"]
 edition = "2021"
-description = "WIP: Idiomatic Rust bindings to the Sodium cryptographic library"
+description = "Safe Rust bindings to the Sodium cryptographic library"
 repository = "https://github.com/tom25519/alkali"
 license = "MIT OR Apache-2.0"
 keywords = ["cryptography", "libsodium", "nacl", "sodium"]

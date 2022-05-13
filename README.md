@@ -3,9 +3,6 @@
 [![docs.rs](https://docs.rs/alkali/badge.svg)](https://docs.rs/alkali)
 [![CI status](https://github.com/tom25519/alkali/actions/workflows/tests.yml/badge.svg?event=push)](https://github.com/tom25519/alkali/actions)
 
-**Please note**: This is currently a work-in-progress, and isn't yet complete,
-nor is it suitable for production usage.
-
 Safe, idiomatic Rust bindings to the [Sodium](https://libsodium.org)
 cryptographic library.
 
@@ -13,10 +10,10 @@ Sodium is a fast, modern cryptographic library written in C. This crate intends
 to provide a higher-level API for making use of the constructs Sodium provides.
 These constructs include simple-to-use symmetric and asymmetric authenticated
 encryption, signatures, hashing, password derivation, and key exchange: In
-short, the majority of operations required for most modern cryptographic
+short, the majority of operations required for many modern cryptographic
 protocols.
 
-The intention for this library is to be a spiritual successor to
+The intention for this library is to be a replacement for
 [sodiumoxide](https://github.com/sodiumoxide/sodiumoxide), which is now
 deprecated. Lots of design decisions here were inspired by this library, so
 thanks to all of its contributors!

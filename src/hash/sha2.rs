@@ -262,6 +262,9 @@ macro_rules! sha2_module {
 
         impl Drop for Multipart {
             fn drop(&mut self) {
+                // We do not use `require_init` here, as it must be called to initialise a
+                // `Multipart` struct.
+
                 unsafe {
                     // SAFETY:
                     // * Is a double-free possible in safe code?
