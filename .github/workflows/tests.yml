@@ -1,0 +1,91 @@
+name: unit-tests
+
+on: [push, pull_request]
+
+env:
+  RUSTFLAGS: '-Dwarnings'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            deps: sudo apt update; sudo apt install -y gcc-multilib
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            toolchain: nightly-x86_64-pc-windows-gnu
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+          toolchain: ${{ matrix.toolchain || 'nightly' }}
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - run: ${{ matrix.deps }}
+        if: ${{ matrix.deps }}
+      - run: cargo test --features "aes alloc hazmat" --target ${{ matrix.target }}
+      - run: cargo test --release --features "aes alloc hazmat optimized" --target ${{ matrix.target }}
+
+  minimal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo test --features "aes alloc hazmat minimal"
+      - run: cargo test --release --features "aes alloc hazmat minimal optimized"
+
+  no-std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo test --lib --no-default-features
+      - run: cargo test --lib --release --no-default-features
+
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo test
+      - run: cargo test --features "aes hazmat"
+      - run: cargo test --release --features "aes hazmat optimized"
+      - run: cargo test --features "aes hazmat minimal"
+      - run: cargo test --release --features "aes hazmat minimal optimized"
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+    - uses: Swatinem/rust-cache@v1
+    - run: cargo doc --features "aes alloc hazmat"
+      env:
+        RUSTDOCFLAGS: '-Drustdoc::broken_intra_doc_links --cfg doc_cfg'
