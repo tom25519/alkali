@@ -3,10 +3,10 @@
 //! Please note that the `scrypt` API is missing the `MEM_LIMIT_MODERATE` and `OPS_LIMIT_MODERATE`
 //! constants included in [`super::argon2id`] and [`super::argon2i`].
 
-use super::pbkdf_module;
+use super::scrypt_module;
 use libsodium_sys as sodium;
 
-pbkdf_module! {
+scrypt_module! {
     sodium::crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_MIN,
     sodium::crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE,
     sodium::crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_SENSITIVE,

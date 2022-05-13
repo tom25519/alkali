@@ -3,10 +3,10 @@
 //! This algorithm is intended to be highly resistant to side-channel attacks, but may be less
 //! resistant to GPU-based attacks than [`super::argon2id`].
 
-use super::pbkdf_module;
+use super::argon_module;
 use libsodium_sys as sodium;
 
-pbkdf_module! {
+argon_module! {
     sodium::crypto_pwhash_argon2i_OPSLIMIT_MIN,
     sodium::crypto_pwhash_argon2i_OPSLIMIT_INTERACTIVE,
     sodium::crypto_pwhash_argon2i_OPSLIMIT_MODERATE,

@@ -544,7 +544,7 @@ macro_rules! pbkdf_module_common {
 pub(crate) use pbkdf_module_common;
 
 /// Generates the API for a `pbkdf` module based with the given functions & constants from Sodium.
-macro_rules! pbkdf_module {
+macro_rules! argon_module {
     (
         $opslim_min:expr,       // crypto_pwhash_OPSLIMIT_MIN
         $opslim_int:expr,       // crypto_pwhash_OPSLIMIT_INTERACTIVE
@@ -699,7 +699,12 @@ macro_rules! pbkdf_module {
             }
         }
     };
+}
 
+pub(crate) use argon_module;
+
+#[cfg(not(feature = "minimal"))]
+macro_rules! scrypt_module {
     (
         $opslim_min:expr,       // crypto_pwhash_OPSLIMIT_MIN
         $opslim_int:expr,       // crypto_pwhash_OPSLIMIT_INTERACTIVE
@@ -841,7 +846,8 @@ macro_rules! pbkdf_module {
     };
 }
 
-pub(crate) use pbkdf_module;
+#[cfg(not(feature = "minimal"))]
+pub(crate) use scrypt_module;
 
 /// Generates tests for the [`derive_key`] function of a `pbkdf` implementation. Takes test
 /// vectors as arguments.
