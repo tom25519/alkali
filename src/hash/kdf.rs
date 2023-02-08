@@ -47,24 +47,24 @@
 //! let mut subkey_d = [0u8; 32];
 //!
 //! // Generate two subkeys with the same ID + context, and demonstrate that they are equal.
-//! kdf::derive_subkey(&original_key, "Context!", 1, &mut subkey_a).unwrap();
-//! kdf::derive_subkey(&original_key, "Context!", 1, &mut subkey_b).unwrap();
+//! kdf::derive_subkey(&original_key, b"Context!", 1, &mut subkey_a).unwrap();
+//! kdf::derive_subkey(&original_key, b"Context!", 1, &mut subkey_b).unwrap();
 //! assert_eq!(subkey_a, subkey_b);
 //!
 //! // Using a different subkey ID will produce a different key.
-//! kdf::derive_subkey(&original_key, "Context!", 2, &mut subkey_c).unwrap();
+//! kdf::derive_subkey(&original_key, b"Context!", 2, &mut subkey_c).unwrap();
 //! assert_ne!(subkey_a, subkey_c);
 //!
 //! // Using a different context will also (very likely) produce a different key.
-//! kdf::derive_subkey(&original_key, "Example?", 1, &mut subkey_d).unwrap();
+//! kdf::derive_subkey(&original_key, b"Example?", 1, &mut subkey_d).unwrap();
 //! assert_ne!(subkey_a, subkey_d);
 //! ```
 
 crate::error_type! {
     /// Error type returned if something went wrong in the `kdf` module.
     KDFError {
-        /// The provided context is of the incorrect length: It must be [`CONTEXT_LENGTH`] bytes.
-        ContextLengthIncorrect,
+        /// The provided context has a null byte `0x00`.
+        ContextInvalid,
 
         /// The requested subkey size is too short or too long for use with this algorithm.
         ///
@@ -136,10 +136,10 @@ pub mod blake2b {
     /// bytes.
     ///
     /// `context` is an identifier used to prevent key reuse across different domains. It does not
-    /// need to be kept secret, nor does it have any entropy requirements, but it must be
-    /// [`CONTEXT_LENGTH`] = 8 bytes long. For example, it could be set to something like
-    /// `"UserName"`, `"__auth__"`, `"pictures"`, `"userdata"`, etc. A different context will
-    /// produce different subkeys from the same original key.
+    /// need to be kept secret, nor does it have any entropy requirements, but it must not contain
+    /// any null bytes (`0x00`). For example, it could be set to something like `b"UserName"`,
+    /// `b"__auth__"`, `b"pictures"`, `b"userdata"`, etc. A different context will produce
+    /// different subkeys from the same original key.
     ///
     /// `subkey_id` is a numeric ID for this subkey. Using the same ID with the same original key
     /// and context will produce the same subkey. This can just be set to a counter value,
@@ -147,17 +147,15 @@ pub mod blake2b {
     /// second, and so on.
     pub fn derive_subkey(
         key: &Key,
-        context: &str,
+        context: &[u8; CONTEXT_LENGTH],
         subkey_id: u64,
         subkey: &mut [u8],
     ) -> Result<(), AlkaliError> {
         require_init()?;
 
-        let context = CString::new(context).unwrap();
+        let context = CString::new(context.to_vec()).map_err(|_| KDFError::ContextInvalid)?;
 
-        if context.as_bytes().len() != CONTEXT_LENGTH {
-            return Err(KDFError::ContextLengthIncorrect.into());
-        } else if subkey.len() < SUBKEY_LENGTH_MIN || subkey.len() > SUBKEY_LENGTH_MAX {
+        if subkey.len() < SUBKEY_LENGTH_MIN || subkey.len() > SUBKEY_LENGTH_MAX {
             return Err(KDFError::SubkeyLengthInvalid.into());
         }
 
@@ -285,7 +283,7 @@ pub mod blake2b {
             ];
 
             for (i, exp) in expected.iter().enumerate() {
-                derive_subkey(&key, "KDF test", i as u64, &mut subkey)?;
+                derive_subkey(&key, b"KDF test", i as u64, &mut subkey)?;
                 assert_eq!(&subkey, exp);
             }
 
@@ -358,12 +356,12 @@ pub mod blake2b {
             for v in expected {
                 if v.0 < SUBKEY_LENGTH_MIN || v.0 > SUBKEY_LENGTH_MAX {
                     assert!(
-                        derive_subkey(&key, "KDF test", v.0 as u64, &mut subkey[..v.0]).is_err()
+                        derive_subkey(&key, b"KDF test", v.0 as u64, &mut subkey[..v.0]).is_err()
                     );
                     continue;
                 }
 
-                derive_subkey(&key, "KDF test", v.0 as u64, &mut subkey[..v.0])?;
+                derive_subkey(&key, b"KDF test", v.0 as u64, &mut subkey[..v.0])?;
                 assert_eq!(&subkey[..v.0], v.1);
             }
 
