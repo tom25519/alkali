@@ -255,6 +255,19 @@ macro_rules! hardened_buffer {
                 }
             }
 
+            /// # Safety
+            /// It is safe to transfer ownership between threads because we have exclusive access to
+            /// the inner pointer.
+            /// As long as we respect rust borrowing rules, there is no way the internal pointer can be freed
+            /// more than once.
+            unsafe impl core::marker::Send for $name {}
+            /// # Safety
+            /// A read-only reference is safe to send across multiple threads because we have exclusive
+            /// access to the inner pointer.
+            /// As long as we respect rust borrowing rules, there is no way the internal pointer can be freed
+            /// more than once.
+            unsafe impl core::marker::Sync for $name {}
+
             impl Drop for $name {
                 fn drop(&mut self) {
                     // We do not use `require_init` here, as it must be called to initialise this
