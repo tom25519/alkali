@@ -191,7 +191,12 @@ macro_rules! auth_module {
         /// This authentication tag is what proves the authenticity of a message, so it should be
         /// transmitted along with the message to be authenticated. Authentication tags are not
         /// sensitive, and may be transmitted in the clear.
-        pub type Tag = [u8; TAG_LENGTH];
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub struct Tag(
+            #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
+            pub  [u8; TAG_LENGTH],
+        );
 
         /// Streaming authentication API, for long/multi-part message authentication.
         ///
@@ -370,7 +375,7 @@ macro_rules! auth_module {
                 };
                 assert_not_err!(finalise_result, stringify!($mp_final));
 
-                tag
+                Tag(tag)
             }
 
             /// Verify the provided tag is correct for the specified message.
@@ -399,7 +404,7 @@ macro_rules! auth_module {
                 };
                 assert_not_err!(finalise_result, stringify!($mp_final));
 
-                if mem::eq(tag, &actual_tag)? {
+                if mem::eq(&tag.0, &actual_tag)? {
                     Ok(())
                 } else {
                     Err(AuthError::AuthenticationFailed.into())
@@ -470,7 +475,7 @@ macro_rules! auth_module {
             };
             assert_not_err!(auth_result, stringify!($authenticate));
 
-            Ok(tag)
+            Ok(Tag(tag))
         }
 
         /// Verifies that an authentication tag is valid for a given message, using the provided
@@ -494,7 +499,7 @@ macro_rules! auth_module {
                 // function, and a full key can be read from the pointer without an over-read. The
                 // `Key::inner` method simply returns a pointer to the backing memory.
                 $verify(
-                    tag.as_ptr(),
+                    tag.0.as_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     key.inner() as *const libc::c_uchar,
@@ -518,7 +523,7 @@ macro_rules! auth_tests {
         key: $key:expr,
         tag: $tag:expr,
     }, )* ) => {
-        use super::{authenticate, verify, Key, Multipart};
+        use super::{authenticate, verify, Key, Multipart, Tag};
         use $crate::random::{fill_random, random_u32_in_range};
         use $crate::AlkaliError;
 
@@ -570,9 +575,9 @@ macro_rules! auth_tests {
                 key.copy_from_slice(&$key);
 
                 let actual_tag = authenticate(&$msg, &key)?;
-                assert_eq!(&actual_tag, &$tag);
+                assert_eq!(actual_tag.0, $tag);
 
-                verify(&$msg, &$tag, &key)?;
+                verify(&$msg, &Tag($tag), &key)?;
             )*
 
             Ok(())
@@ -606,7 +611,7 @@ macro_rules! auth_tests {
                 }
                 state.verify(&tag_multi)?;
 
-                fill_random(&mut tag_multi)?;
+                fill_random(&mut tag_multi.0)?;
                 let mut state = Multipart::new(&key)?;
                 let mut written = 0;
                 while written < i {

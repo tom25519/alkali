@@ -289,7 +289,11 @@ impl Scalar {
 /// A 64-byte value from which a point on the curve can be derived via [`Point::from_hash`].
 ///
 /// This is usually the output of a hash function.
-pub type Hash = [u8; HASH_LENGTH];
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Hash(
+    #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))] pub [u8; HASH_LENGTH],
+);
 
 /// A point on Ristretto255.
 #[derive(Clone, Copy, Debug)]
@@ -331,7 +335,7 @@ impl Point {
             // the 64-byte value from which the point should be derived. We define the `Hash` type
             // to be `crypto_core_ristretto255_HASHBYTES`, the length of a value from which a point
             // can be derived. Therefore `h` is valid for reads of the required length.
-            sodium::crypto_core_ristretto255_from_hash(p.as_mut_ptr(), h.as_ptr())
+            sodium::crypto_core_ristretto255_from_hash(p.as_mut_ptr(), h.0.as_ptr())
         };
         assert_not_err!(from_hash_result, "crypto_core_ristretto255_from_hash");
 
@@ -521,7 +525,7 @@ pub fn scalar_mult_base(n: &Scalar) -> Result<Point, AlkaliError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{scalar_mult_base, Point, Scalar, HASH_LENGTH};
+    use super::{scalar_mult_base, Hash, Point, Scalar, HASH_LENGTH};
     use crate::{random, AlkaliError};
 
     const GENERATOR: Point = Point([
@@ -965,8 +969,8 @@ mod tests {
             ],
         ];
 
-        for (hash, expected) in hashes.iter().zip(&points) {
-            let p = Point::from_hash(hash)?;
+        for (&hash, expected) in hashes.iter().zip(&points) {
+            let p = Point::from_hash(&Hash(hash))?;
             assert_eq!(&p.0[..], &expected[..]);
             assert!(p.is_valid()?);
         }
@@ -1001,7 +1005,7 @@ mod tests {
     fn scalar_complement_over_mul() -> Result<(), AlkaliError> {
         let mut h = [0u8; HASH_LENGTH];
         random::fill_random(&mut h)?;
-        let mut p = Point::from_hash(&h)?;
+        let mut p = Point::from_hash(&Hash(h))?;
         let mut q = p;
         let mut s = Scalar::generate()?;
 
@@ -1010,7 +1014,7 @@ mod tests {
         q.scalar_mult_in_place(&s)?;
 
         let r = p.add(&q)?;
-        let mut p_orig = Point::from_hash(&h)?;
+        let mut p_orig = Point::from_hash(&Hash(h))?;
         p_orig.sub_in_place(&r)?;
 
         assert_eq!(

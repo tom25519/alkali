@@ -40,13 +40,13 @@
 //! let hash = sha2::hash(message).unwrap();
 //! assert_eq!(
 //!     hash,
-//!     [
+//!     sha2::Digest([
 //!         0xb7, 0xee, 0x33, 0x80, 0x83, 0xf0, 0x41, 0x65, 0xc1, 0xff, 0xfb, 0xb2, 0x14, 0x6f,
 //!         0x18, 0x8b, 0x9c, 0x01, 0x31, 0xd3, 0x0e, 0x7c, 0x45, 0x36, 0xbe, 0xb3, 0x4a, 0x1d,
 //!         0xb0, 0x2d, 0x86, 0x9d, 0x87, 0x1a, 0x1c, 0x84, 0xd7, 0x9b, 0x9d, 0xe3, 0x15, 0xc3,
 //!         0xb4, 0x2d, 0x9a, 0xb9, 0x54, 0x25, 0x7a, 0xf9, 0x06, 0x28, 0x66, 0x8d, 0x9a, 0xa5,
 //!         0x31, 0x45, 0x19, 0xbc, 0x4c, 0x2f, 0xcb, 0xa4
-//!     ]
+//!     ])
 //! );
 //! ```
 //!
@@ -87,7 +87,12 @@ macro_rules! sha2_module {
         pub const DIGEST_LENGTH: usize = $digest_len as usize;
 
         /// Stores the digest ("fingerprint") of a message calculated using this hash function.
-        pub type Digest = [u8; DIGEST_LENGTH];
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub struct Digest(
+            #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
+            pub  [u8; DIGEST_LENGTH],
+        );
 
         /// Streaming hash API, for long/multi-part message hashing.
         ///
@@ -240,7 +245,7 @@ macro_rules! sha2_module {
                 };
                 assert_not_err!(finalise_result, stringify!($mp_final));
 
-                digest
+                Digest(digest)
             }
 
             /// Calculate the hash of the concatenated message contents.
@@ -256,7 +261,7 @@ macro_rules! sha2_module {
             /// This comparison runs in constant time.
             pub fn compare(mut self, digest: &Digest) -> bool {
                 let actual_digest = self.finalise();
-                mem::eq(digest, &actual_digest).unwrap()
+                mem::eq(&digest.0, &actual_digest.0).unwrap()
             }
         }
 
@@ -316,7 +321,7 @@ macro_rules! sha2_module {
             };
             assert_not_err!(hash_result, stringify!($hash));
 
-            Ok(digest)
+            Ok(Digest(digest))
         }
     };
 }
@@ -329,13 +334,13 @@ macro_rules! sha2_tests {
         out: $out:expr,
     }, )* ) => {
         use $crate::{AlkaliError, random};
-        use super::{hash, Multipart};
+        use super::{hash, Digest, Multipart};
 
         #[test]
         fn single_part_test_vectors() -> Result<(), AlkaliError> {
             $(
                 let digest = hash($msg)?;
-                assert_eq!(digest, $out);
+                assert_eq!(digest, Digest($out));
             )*
 
             Ok(())
@@ -347,9 +352,9 @@ macro_rules! sha2_tests {
                     let mut state = Multipart::new()?;
                     state.update($msg);
                     let state_b = state.try_clone()?;
-                    assert!(state_b.compare(&$out));
+                    assert!(state_b.compare(&Digest($out)));
                     let digest = state.calculate();
-                    assert_eq!(digest, $out);
+                    assert_eq!(digest, Digest($out));
                 )*
 
             for _ in 0..1000 {
@@ -359,9 +364,9 @@ macro_rules! sha2_tests {
                     state.update(&$msg[..boundary]);
                     state.update(&$msg[boundary..]);
                     let state_b = state.try_clone()?;
-                    assert!(state_b.compare(&$out));
+                    assert!(state_b.compare(&Digest($out)));
                     let digest = state.calculate();
-                    assert_eq!(digest, $out);
+                    assert_eq!(digest, Digest($out));
                 )*
 
                 $(
@@ -373,9 +378,9 @@ macro_rules! sha2_tests {
                     state.update(&$msg[boundary_a..boundary_b]);
                     state.update(&$msg[boundary_b..]);
                     let state_b = state.try_clone()?;
-                    assert!(state_b.compare(&$out));
+                    assert!(state_b.compare(&Digest($out)));
                     let digest = state.calculate();
-                    assert_eq!(digest, $out);
+                    assert_eq!(digest, Digest($out));
                 )*
             }
 
