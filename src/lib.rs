@@ -67,7 +67,8 @@
 //! APIs will be disabled: Those which require `std` support are marked as such in the
 //! documentation.
 //!
-//! [Serde](https://serde.rs) support can be enabled using the `serde` feature (enabled by default).
+//! [Serde](https://serde.rs) support can be enabled using the `use-serde` feature (enabled by
+//! default).
 //!
 //! # Hardened Buffer Types
 //! Throughout this crate, a number of types used to store secret data (keys, seeds, etc.) use a

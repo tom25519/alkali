@@ -62,7 +62,7 @@ impl Scalar {
 ///
 /// For Curve25519, only the `x` coordinate is stored.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Point(pub [u8; POINT_LENGTH]);
 
 impl Point {

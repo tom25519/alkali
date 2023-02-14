@@ -254,9 +254,9 @@ pub mod ed25519 {
     /// it should be transmitted along with the message. Signatures are not sensitive, and may be
     /// transmitted in the clear.
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Signature(
-        #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
+        #[cfg_attr(feature = "use-serde", serde(with = "serde_big_array::BigArray"))]
         pub  [u8; SIGNATURE_LENGTH],
     );
 
@@ -270,7 +270,7 @@ pub mod ed25519 {
     ///
     /// The private key is used to sign messages, and must be kept secret, while the public key is
     /// used to verify messages, and should be made public.
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
         pub private_key: PrivateKey,

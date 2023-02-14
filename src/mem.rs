@@ -433,8 +433,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            #[cfg(feature = "serde")]
-            #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+            #[cfg(feature = "use-serde")]
+            #[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
             impl serde::Serialize for $name {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
@@ -444,8 +444,8 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            #[cfg(feature = "serde")]
-            #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+            #[cfg(feature = "use-serde")]
+            #[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
             impl<'de> serde::Deserialize<'de> for $name {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
                 where

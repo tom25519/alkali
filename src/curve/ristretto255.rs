@@ -290,14 +290,15 @@ impl Scalar {
 ///
 /// This is usually the output of a hash function.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Hash(
-    #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))] pub [u8; HASH_LENGTH],
+    #[cfg_attr(feature = "use-serde", serde(with = "serde_big_array::BigArray"))]
+    pub  [u8; HASH_LENGTH],
 );
 
 /// A point on Ristretto255.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Point(pub [u8; POINT_LENGTH]);
 
 impl Point {

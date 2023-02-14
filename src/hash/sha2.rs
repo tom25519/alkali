@@ -88,9 +88,9 @@ macro_rules! sha2_module {
 
         /// Stores the digest ("fingerprint") of a message calculated using this hash function.
         #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct Digest(
-            #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
+            #[cfg_attr(feature = "use-serde", serde(with = "serde_big_array::BigArray"))]
             pub  [u8; DIGEST_LENGTH],
         );
 

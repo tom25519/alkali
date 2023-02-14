@@ -368,7 +368,7 @@ macro_rules! cipher_module {
         /// A ([`PrivateKey`], [`PublicKey`]) keypair, used for asymmetric AE.
         ///
         /// The private key must be kept secret, while the public key can be made public.
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct Keypair {
             /// The private key for this keypair.
             pub private_key: PrivateKey,

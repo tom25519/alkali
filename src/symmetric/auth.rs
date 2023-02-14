@@ -192,9 +192,9 @@ macro_rules! auth_module {
         /// transmitted along with the message to be authenticated. Authentication tags are not
         /// sensitive, and may be transmitted in the clear.
         #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct Tag(
-            #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
+            #[cfg_attr(feature = "use-serde", serde(with = "serde_big_array::BigArray"))]
             pub  [u8; TAG_LENGTH],
         );
 
