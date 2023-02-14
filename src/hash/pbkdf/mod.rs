@@ -220,9 +220,10 @@ crate::error_type! {
 
         /// The password verification against the provided hash failed.
         ///
-        /// This indicates that the password was incorrect for this hash, or potentially that
-        /// calculating the hash failed, although this is unlikely in comparison to the former
-        /// possibility. In any case, the user should not be allowed to log in.
+        /// This indicates that the password was incorrect for this hash, the provided hash was
+        /// invalid, or potentially that calculating the hash failed, although the latter two are
+        /// unlikely in comparison to the first possibility. In any case, the user should not be
+        /// allowed to log in.
         PasswordIncorrect,
     }
 }
@@ -461,7 +462,8 @@ macro_rules! pbkdf_module_common {
         pub fn verify_password(password: &str, hash: &str) -> Result<(), AlkaliError> {
             require_init()?;
 
-            let hash = std::ffi::CString::new(hash).unwrap();
+            let hash = std::ffi::CString::new(hash)
+                .map_err(|_| $crate::hash::pbkdf::PasswordHashError::PasswordIncorrect)?;
 
             let verification_result = unsafe {
                 // SAFETY: The first argument to this function should be a pointer to the hash
@@ -513,7 +515,10 @@ macro_rules! pbkdf_module_common {
         ) -> Result<RehashResult, AlkaliError> {
             require_init()?;
 
-            let hash = std::ffi::CString::new(hash).unwrap();
+            let hash = match std::ffi::CString::new(hash) {
+                Ok(hash) => hash,
+                Err(_) => return Ok(RehashResult::InvalidHash),
+            };
 
             let rehash_result = unsafe {
                 // SAFETY: The first argument to this function should be a pointer to the hash

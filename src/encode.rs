@@ -87,7 +87,7 @@ pub mod hex {
 
         let mut written = 0;
 
-        let hex = CString::new(hex).unwrap();
+        let hex = CString::new(hex).map_err(|_| AlkaliError::DecodeError)?;
 
         // SAFETY: The first argument to this function is the destination to which the decoded
         // bytes will be written. The second argument specifies the maximum number of bytes which
@@ -160,7 +160,7 @@ pub mod hex {
     ///
     /// This decoding runs in constant-time for a given length of hex string.
     pub fn decode_ignore(hex: &str, ignore: &str, output: &mut [u8]) -> Result<usize, AlkaliError> {
-        let ignore = CString::new(ignore).unwrap();
+        let ignore = CString::new(ignore).map_err(|_| AlkaliError::DecodeError)?;
 
         let written = unsafe {
             // SAFETY: The `decode_impl` function requires that the `ignore` argument (second
@@ -351,7 +351,7 @@ pub mod base64 {
 
         let mut written = 0;
 
-        let base64 = CString::new(base64).unwrap();
+        let base64 = CString::new(base64).map_err(|_| AlkaliError::DecodeError)?;
 
         // SAFETY: The first argument to this function is the destination to which the decoded
         // bytes will be written. The second argument specifies the maximum number of bytes which
@@ -429,7 +429,7 @@ pub mod base64 {
         variant: Variant,
         output: &mut [u8],
     ) -> Result<usize, AlkaliError> {
-        let ignore = CString::new(ignore).unwrap();
+        let ignore = CString::new(ignore).map_err(|_| AlkaliError::DecodeError)?;
 
         let written = unsafe {
             // SAFETY: The `decode_impl` function requires that the `ignore` argument (second
