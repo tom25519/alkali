@@ -1,6 +1,6 @@
 [package]
 name = "alkali"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["tom25519 <tom25519@pm.me>"]
 edition = "2021"
 description = "Safe Rust bindings to the Sodium cryptographic library"
