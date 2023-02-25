@@ -125,7 +125,7 @@ macro_rules! stream_module {
             pub Key(KEY_LENGTH);
         }
 
-        impl Key {
+        impl Key<mem::FullAccess> {
             /// Generate a new, random key for use with this stream cipher.
             pub fn generate() -> Result<Self, AlkaliError> {
                 require_init()?;
@@ -157,7 +157,11 @@ macro_rules! stream_module {
         /// function is equivalent to encrypting a message of all zeroes). Therefore, the standard
         /// concerns about nonce reuse with this cipher apply: Do not reuse nonces with the same
         /// key if the keystream is to be used to encrypt messages.
-        pub fn keystream(key: &Key, nonce: &Nonce, output: &mut [u8]) -> Result<(), AlkaliError> {
+        pub fn keystream(
+            key: &Key<impl mem::MprotectReadable>,
+            nonce: &Nonce,
+            output: &mut [u8],
+        ) -> Result<(), AlkaliError> {
             require_init()?;
 
             if output.len() > *MESSAGE_LENGTH_MAX {
@@ -212,7 +216,7 @@ macro_rules! stream_module {
         /// without the receiver detecting any change, potentially leading to vulnerabilities.
         pub fn encrypt(
             message: &[u8],
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: &Nonce,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
@@ -266,7 +270,7 @@ macro_rules! stream_module {
         /// always be `ciphertext.len()` bytes).
         pub fn decrypt(
             ciphertext: &[u8],
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: &Nonce,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
@@ -326,7 +330,7 @@ macro_rules! stream_module {
         pub fn encrypt_ic(
             message: &[u8],
             ic: $ic_type,
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: &Nonce,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
@@ -389,7 +393,7 @@ macro_rules! stream_module {
         pub fn decrypt_ic(
             ciphertext: &[u8],
             ic: $ic_type,
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: &Nonce,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
@@ -427,7 +431,7 @@ macro_rules! expansion_function {
 
         $(#[$metadata])*
         pub fn expand(
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             n: &ExpandInput,
             constants: Option<&ExpandConstants>,
             output: &mut [u8],
@@ -677,7 +681,7 @@ pub mod xsalsa20 {
     /// The [`HSalsaNonce`] input to this function should *never* be used more than once with the
     /// same key.
     pub fn hsalsa20(
-        key: &Key,
+        key: &Key<impl mem::MprotectReadable>,
         nonce: &HSalsaNonce,
         constants: Option<&HSalsaConstants>,
         output: &mut [u8],
@@ -1465,7 +1469,7 @@ pub mod xchacha20 {
     /// The [`HChaChaNonce`] input to this function should *never* be used more than once with the
     /// same key.
     pub fn hchacha20(
-        key: &Key,
+        key: &Key<impl mem::MprotectReadable>,
         nonce: &HChaChaNonce,
         constants: Option<&HChaChaConstants>,
         output: &mut [u8],

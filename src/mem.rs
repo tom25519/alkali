@@ -103,6 +103,77 @@ pub type HardenedVec<T> = Vec<T, SodiumAllocator>;
 #[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 pub type HardenedBox<T> = Box<T, SodiumAllocator>;
 
+/// Marker trait for types used to signify the status of a [hardened
+/// buffer](https://docs.rs/alkali#hardened-buffer-types).
+///
+/// The [`sodium_mprotect`](https://doc.libsodium.org/memory_management#guarded-heap-allocations)
+/// API can be used to set a region of memory to be read-only, or totally inaccessible, to minimise
+/// the risk of sensitive data being leaked. In order to provide a type-safe system for interacting
+/// with this API, we attach a zero-sized `MprotectStatus` marker type to hardened buffers,
+/// signifying the current memory-protection status of the buffer.
+pub trait MprotectStatus {}
+
+/// Marker trait for types used to signify that a [hardened
+/// buffer](https://docs.rs/alkali#hardened-buffer-types) is in a readable state.
+///
+/// The [`sodium_mprotect`](https://doc.libsodium.org/memory_management#guarded-heap-allocations)
+/// API can be used to set a region of memory to be read-only, or totally inaccessible, to minimise
+/// the risk of sensitive data being leaked. In order to provide a type-safe system for interacting
+/// with this API, we attach a zero-sized `MprotectStatus` marker type to hardened buffers,
+/// signifying the current memory-protection status of the buffer.
+///
+/// This trait is implemented for `MprotectStatus` types which signify that the buffer is in a
+/// readable state.
+pub trait MprotectReadable: MprotectStatus {}
+
+/// Marker type used to signify that a [hardened
+/// buffer](https://docs.rs/alkali#hardened-buffer-types) can be written to/read from.
+///
+/// The [`sodium_mprotect`](https://doc.libsodium.org/memory_management#guarded-heap-allocations)
+/// API can be used to set a region of memory to be read-only, or totally inaccessible, to minimise
+/// the risk of sensitive data being leaked. In order to provide a type-safe system for interacting
+/// with this API, we attach a zero-sized `MprotectStatus` marker type to hardened buffers,
+/// signifying the current memory-protection status of the buffer.
+///
+/// This type indicates a buffer is in the "normal" state for any allocated memory region - it can
+/// be written to and read from.
+#[derive(Clone, Copy, Eq, Debug, Hash, PartialEq)]
+pub struct FullAccess;
+
+impl MprotectStatus for FullAccess {}
+impl MprotectReadable for FullAccess {}
+
+/// Marker type used to signify that a [hardened
+/// buffer](https://docs.rs/alkali#hardened-buffer-types) is read-only.
+///
+/// The [`sodium_mprotect`](https://doc.libsodium.org/memory_management#guarded-heap-allocations)
+/// API can be used to set a region of memory to be read-only, or totally inaccessible, to minimise
+/// the risk of sensitive data being leaked. In order to provide a type-safe system for interacting
+/// with this API, we attach a zero-sized `MprotectStatus` marker type to hardened buffers,
+/// signifying the current memory-protection status of the buffer.
+///
+/// This type indicates a buffer may only be read from, and not written to. Attempts to write to a
+/// buffer in this state will result in the process being terminated.
+pub struct ReadOnly;
+
+impl MprotectStatus for ReadOnly {}
+impl MprotectReadable for ReadOnly {}
+
+/// Marker type used to signify that a [hardened
+/// buffer](https://docs.rs/alkali#hardened-buffer-types) may not be accessed.
+///
+/// The [`sodium_mprotect`](https://doc.libsodium.org/memory_management#guarded-heap-allocations)
+/// API can be used to set a region of memory to be read-only, or totally inaccessible, to minimise
+/// the risk of sensitive data being leaked. In order to provide a type-safe system for interacting
+/// with this API, we attach a zero-sized `MprotectStatus` marker type to hardened buffers,
+/// signifying the current memory-protection status of the buffer.
+///
+/// This type indicates a buffer may not be accessed at all. Attempts to read from or write to a
+/// buffer in this state will result in the process being terminated.
+pub struct NoAccess;
+
+impl MprotectStatus for NoAccess {}
+
 /// Creates a hardened buffer type, for storing sensitive data (keys, passwords, etc).
 ///
 /// As per the rationale presented in the [`mem`](crate::mem) module, it is often necessary to take
@@ -172,14 +243,17 @@ macro_rules! hardened_buffer {
     ( $( $(#[$metadata:meta])* $vis:vis $name:ident($size:expr)$(;)? )* ) => {
         $(
             $(#[$metadata])*
-            $vis struct $name {
+            $vis struct $name<Mprotect: $crate::mem::MprotectStatus> {
                 ptr: core::ptr::NonNull<[u8; $size]>,
                 _marker: core::marker::PhantomData<[u8; $size]>,
+                _mprotect: core::marker::PhantomData<Mprotect>,
             }
 
-            impl $name {
+            impl<Mprotect: $crate::mem::MprotectStatus> $name<Mprotect> {
                 pub const LENGTH: usize = $size as usize;
+            }
 
+            impl $name<$crate::mem::FullAccess> {
                 /// Create a new instance of this type, filled with all zeroes.
                 pub fn new_empty() -> Result<Self, $crate::AlkaliError> {
                     $crate::require_init()?;
@@ -208,6 +282,7 @@ macro_rules! hardened_buffer {
                     Ok(Self {
                         ptr,
                         _marker: core::marker::PhantomData,
+                        _mprotect: core::marker::PhantomData,
                     })
                 }
 
@@ -218,28 +293,6 @@ macro_rules! hardened_buffer {
                 /// this as soon as the buffer is no longer required.
                 pub fn zero(&mut self) -> Result<(), $crate::AlkaliError> {
                     $crate::mem::clear(self.as_mut())
-                }
-
-                /// Create a new instance of the same type, copying the contents of this buffer.
-                ///
-                /// This operation may fail, as Sodium's allocator is more likely to encounter
-                /// issues than the standard system allocator.
-                pub fn try_clone(&self) -> Result<Self, $crate::AlkaliError> {
-                    let mut new_buf = Self::new_empty()?;
-                    new_buf.copy_from_slice(self.as_ref());
-                    Ok(new_buf)
-                }
-
-                /// Returns a raw constant pointer to the memory backing this type.
-                ///
-                /// # Safety
-                /// This function is only used internally. This struct assumes that the memory will
-                /// remain valid until it is dropped, so anywhere this method is used, the memory
-                /// must not be freed. Furthermore, the memory is only valid for the lifetime of
-                /// this struct, so after it is dropped, this pointer must not be used again.
-                #[allow(dead_code)]
-                unsafe fn inner(&self) -> *const [u8; $size] {
-                    self.ptr.as_ptr()
                 }
 
                 /// Returns a raw mutable pointer to the memory backing this type.
@@ -255,21 +308,45 @@ macro_rules! hardened_buffer {
                 }
             }
 
+            impl<Mprotect: $crate::mem::MprotectReadable> $name<Mprotect> {
+                /// Create a new instance of the same type, copying the contents of this buffer.
+                ///
+                /// This operation may fail, as Sodium's allocator is more likely to encounter
+                /// issues than the standard system allocator.
+                pub fn try_clone(&self) -> Result<$name<$crate::mem::FullAccess>, $crate::AlkaliError> {
+                    let mut new_buf = $name::new_empty()?;
+                    new_buf.copy_from_slice(self.as_ref());
+                    Ok(new_buf)
+                }
+
+                /// Returns a raw constant pointer to the memory backing this type.
+                ///
+                /// # Safety
+                /// This function is only used internally. This struct assumes that the memory will
+                /// remain valid until it is dropped, so anywhere this method is used, the memory
+                /// must not be freed. Furthermore, the memory is only valid for the lifetime of
+                /// this struct, so after it is dropped, this pointer must not be used again.
+                #[allow(dead_code)]
+                unsafe fn inner(&self) -> *const [u8; $size] {
+                    self.ptr.as_ptr()
+                }
+            }
+
             /// # Safety
             /// It is safe to transfer ownership between threads because we have exclusive access to
             /// the inner pointer.
             /// As long as we respect rust borrowing rules, there is no way the internal pointer can
             /// be freed more than once.
-            unsafe impl core::marker::Send for $name {}
+            unsafe impl<Mprotect: $crate::mem::MprotectStatus> core::marker::Send for $name<Mprotect> {}
 
             /// # Safety
             /// A read-only reference is safe to send across multiple threads because we have
             /// exclusive access to the inner pointer.
             /// As long as we respect rust borrowing rules, there is no way the internal pointer can
             /// be freed more than once.
-            unsafe impl core::marker::Sync for $name {}
+            unsafe impl<Mprotect: $crate::mem::MprotectStatus> core::marker::Sync for $name<Mprotect> {}
 
-            impl Drop for $name {
+            impl<Mprotect: $crate::mem::MprotectStatus> Drop for $name<Mprotect> {
                 fn drop(&mut self) {
                     // We do not use `require_init` here, as it must be called to initialise this
                     // struct.
@@ -301,7 +378,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl TryFrom<&[u8]> for $name {
+            impl TryFrom<&[u8]> for $name<$crate::mem::FullAccess> {
                 type Error = $crate::AlkaliError;
 
                 fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
@@ -315,7 +392,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl TryFrom<&[u8; $size]> for $name {
+            impl TryFrom<&[u8; $size]> for $name<$crate::mem::FullAccess> {
                 type Error = $crate::AlkaliError;
 
                 fn try_from(buf: &[u8; $size]) -> Result<Self, Self::Error> {
@@ -325,7 +402,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl core::convert::AsMut<[u8; $size]> for $name {
+            impl core::convert::AsMut<[u8; $size]> for $name<$crate::mem::FullAccess> {
                 fn as_mut(&mut self) -> &mut [u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -341,7 +418,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl core::convert::AsRef<[u8; $size]> for $name {
+            impl<Mprotect: $crate::mem::MprotectReadable> core::convert::AsRef<[u8; $size]> for $name<Mprotect> {
                 fn as_ref(&self) -> &[u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -358,7 +435,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl core::borrow::Borrow<[u8; $size]> for $name {
+            impl<Mprotect: $crate::mem::MprotectReadable> core::borrow::Borrow<[u8; $size]> for $name<Mprotect> {
                 fn borrow(&self) -> &[u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -375,7 +452,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl core::borrow::BorrowMut<[u8; $size]> for $name {
+            impl core::borrow::BorrowMut<[u8; $size]> for $name<$crate::mem::FullAccess> {
                 fn borrow_mut(&mut self) -> &mut [u8; $size] {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -391,7 +468,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl core::fmt::Debug for $name {
+            impl<Mprotect: $crate::mem::MprotectStatus> core::fmt::Debug for $name<Mprotect> {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                     f.write_str(stringify!($name))?;
                     f.write_str("([u8; ")?;
@@ -400,7 +477,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            impl core::ops::Deref for $name {
+            impl<Mprotect: $crate::mem::MprotectReadable> core::ops::Deref for $name<Mprotect> {
                 type Target = [u8; $size];
 
                 fn deref(&self) -> &Self::Target {
@@ -420,9 +497,9 @@ macro_rules! hardened_buffer {
             }
 
             /// This implementation of `Eq` is constant-time.
-            impl core::cmp::Eq for $name {}
+            impl<Mprotect: $crate::mem::MprotectReadable> core::cmp::Eq for $name<Mprotect> {}
 
-            impl core::ops::DerefMut for $name {
+            impl core::ops::DerefMut for $name<$crate::mem::FullAccess> {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     unsafe {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
@@ -439,13 +516,13 @@ macro_rules! hardened_buffer {
             }
 
             /// This implementation of `PartialEq` is constant-time.
-            impl core::cmp::PartialEq<Self> for $name {
+            impl<Mprotect: $crate::mem::MprotectReadable> core::cmp::PartialEq<Self> for $name<Mprotect> {
                 fn eq(&self, other: &Self) -> bool {
                     $crate::mem::eq(self.as_ref(), other.as_ref()).unwrap()
                 }
             }
 
-            impl core::fmt::Pointer for $name {
+            impl<Mprotect: $crate::mem::MprotectStatus> core::fmt::Pointer for $name<Mprotect> {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
                     <core::ptr::NonNull<[u8; $size]> as core::fmt::Pointer>::fmt(&self.ptr, f)
                 }
@@ -453,7 +530,7 @@ macro_rules! hardened_buffer {
 
             #[cfg(feature = "use-serde")]
             #[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
-            impl serde::Serialize for $name {
+            impl<Mprotect: $crate::mem::MprotectReadable> serde::Serialize for $name<Mprotect> {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
                     S: serde::Serializer,
@@ -464,7 +541,7 @@ macro_rules! hardened_buffer {
 
             #[cfg(feature = "use-serde")]
             #[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
-            impl<'de> serde::Deserialize<'de> for $name {
+            impl<'de> serde::Deserialize<'de> for $name<$crate::mem::FullAccess> {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
                 where
                     D: serde::Deserializer<'de>,
@@ -472,7 +549,7 @@ macro_rules! hardened_buffer {
                     struct BufVisitor;
 
                     impl<'de> serde::de::Visitor<'de> for BufVisitor {
-                        type Value = $name;
+                        type Value = $name<$crate::mem::FullAccess>;
 
                         fn expecting(
                             &self,

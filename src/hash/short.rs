@@ -84,7 +84,7 @@ macro_rules! short_module {
             pub Key(KEY_LENGTH);
         }
 
-        impl Key {
+        impl Key<mem::FullAccess> {
             /// Generate a new, random key for use with this hash.
             pub fn generate() -> Result<Self, AlkaliError> {
                 let mut key = Self::new_empty()?;
@@ -102,7 +102,10 @@ macro_rules! short_module {
         /// This function returns the hash of the given message, dependent on the provided `key`.
         /// The same `(message, key)` combination will always produce the same hash. A different
         /// key will produce a different hash for the same message.
-        pub fn hash(message: &[u8], key: &Key) -> Result<Digest, AlkaliError> {
+        pub fn hash(
+            message: &[u8],
+            key: &Key<impl mem::MprotectReadable>,
+        ) -> Result<Digest, AlkaliError> {
             require_init()?;
 
             let mut digest = [0u8; DIGEST_LENGTH];

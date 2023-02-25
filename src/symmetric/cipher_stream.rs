@@ -211,7 +211,7 @@ pub mod xchacha20poly1305 {
         pub Key(KEY_LENGTH);
     }
 
-    impl Key {
+    impl Key<mem::FullAccess> {
         /// Generate a new, random key for use in stream encryption.
         pub fn generate() -> Result<Self, AlkaliError> {
             require_init()?;
@@ -253,7 +253,7 @@ pub mod xchacha20poly1305 {
         ///
         /// Returns a new [`EncryptionStream`] instance, or an error if Sodium could not be
         /// initialised.
-        pub fn new(key: &Key) -> Result<Self, AlkaliError> {
+        pub fn new(key: &Key<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
             require_init()?;
 
             let mut header = [0u8; HEADER_LENGTH];
@@ -611,7 +611,10 @@ pub mod xchacha20poly1305 {
         ///
         /// Returns a new [`DecryptionStream`] instance, or an error if Sodium could not be
         /// initialised.
-        pub fn new(key: &Key, header: &Header) -> Result<Self, AlkaliError> {
+        pub fn new(
+            key: &Key<impl mem::MprotectReadable>,
+            header: &Header,
+        ) -> Result<Self, AlkaliError> {
             require_init()?;
 
             let mut state = unsafe {

@@ -273,7 +273,7 @@ pub mod ed25519 {
     #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
-        pub private_key: PrivateKey,
+        pub private_key: PrivateKey<mem::FullAccess>,
 
         /// The public key corresponding to the private key.
         pub public_key: PublicKey,
@@ -325,7 +325,7 @@ pub mod ed25519 {
         /// secret, and a [`PublicKey`], which is used to verify message signatures and should be
         /// made public. The generated private key will be
         /// [clamped](https://www.jcraige.com/an-explainer-on-ed25519-clamping).
-        pub fn from_seed(seed: &Seed) -> Result<Self, AlkaliError> {
+        pub fn from_seed(seed: &Seed<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
             require_init()?;
 
             let mut private_key = PrivateKey::new_empty()?;
@@ -372,7 +372,9 @@ pub mod ed25519 {
         /// by something like [`Keypair::generate`] or [`Keypair::from_seed`], not just random
         /// bytes! If you want to deterministically construct a keypair from random data, use
         /// [`Keypair::from_seed`] instead, as this will clamp the private key.
-        pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, AlkaliError> {
+        pub fn from_private_key(
+            private_key: &PrivateKey<impl mem::MprotectReadable>,
+        ) -> Result<Self, AlkaliError> {
             require_init()?;
 
             let mut public_key = [0; PUBLIC_KEY_LENGTH];
@@ -405,7 +407,7 @@ pub mod ed25519 {
         /// This function will return a [`Seed`] which will always produce this keypair when used
         /// with [`Keypair::from_seed`]. Since it is trivial to derive the private key given a seed,
         /// the seed returned here should be protected as though it were also a private key.
-        pub fn get_seed(&self) -> Result<Seed, AlkaliError> {
+        pub fn get_seed(&self) -> Result<Seed<mem::FullAccess>, AlkaliError> {
             // We do not use `require_init` here, as it must be called to initialise a `Keypair`
             // struct.
 

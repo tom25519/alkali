@@ -164,7 +164,7 @@ macro_rules! auth_module {
             pub Key(KEY_LENGTH);
         }
 
-        impl Key {
+        impl Key<mem::FullAccess> {
             /// Generate a new, random key for use in symmetric message authentication.
             pub fn generate() -> Result<Self, AlkaliError> {
                 require_init()?;
@@ -221,7 +221,7 @@ macro_rules! auth_module {
             ///
             /// The provided [`Key`] should be the shared symmetric key to use for
             /// authentication/verification.
-            pub fn new(key: &Key) -> Result<Self, AlkaliError> {
+            pub fn new(key: &Key<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
                 require_init()?;
 
                 let mut state = unsafe {
@@ -449,7 +449,10 @@ macro_rules! auth_module {
         /// Do not use this function to *verify* an existing authentication tag for a message, as
         /// naïve comparison of authentication tags gives rise to a timing attack. Instead, use
         /// the [`verify`] function, which verifies an authentication tag in constant time.
-        pub fn authenticate(message: &[u8], key: &Key) -> Result<Tag, AlkaliError> {
+        pub fn authenticate(
+            message: &[u8],
+            key: &Key<impl mem::MprotectReadable>,
+        ) -> Result<Tag, AlkaliError> {
             require_init()?;
 
             let mut tag = [0u8; TAG_LENGTH];
@@ -484,7 +487,11 @@ macro_rules! auth_module {
         /// Returns an [`AuthError::AuthenticationFailed`](
         /// crate::symmetric::auth::AuthError::AuthenticationFailed) if verification of the
         /// authentication tag failed.
-        pub fn verify(message: &[u8], tag: &Tag, key: &Key) -> Result<(), AlkaliError> {
+        pub fn verify(
+            message: &[u8],
+            tag: &Tag,
+            key: &Key<impl mem::MprotectReadable>,
+        ) -> Result<(), AlkaliError> {
             require_init()?;
 
             let verification_result = unsafe {

@@ -197,7 +197,7 @@ macro_rules! seal_module {
             pub Seed(KEY_SEED_LENGTH);
         }
 
-        impl PrivateKey {
+        impl<Mprotect: mem::MprotectReadable> PrivateKey<Mprotect> {
             /// Derive the public key corresponding to this private key.
             pub fn public_key(&self) -> Result<PublicKey, AlkaliError> {
                 require_init()?;
@@ -243,7 +243,7 @@ macro_rules! seal_module {
         #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct Keypair {
             /// The private key for this keypair.
-            pub private_key: PrivateKey,
+            pub private_key: PrivateKey<mem::FullAccess>,
 
             /// The public key corresponding to the private key.
             pub public_key: PublicKey,
@@ -290,7 +290,7 @@ macro_rules! seal_module {
             ///
             /// A keypair consists of a [`PrivateKey`], which must be kept secret, and a
             /// [`PublicKey`], which should be made public.
-            pub fn from_seed(seed: &Seed) -> Result<Self, AlkaliError> {
+            pub fn from_seed(seed: &Seed<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
                 require_init()?;
 
                 let mut private_key = PrivateKey::new_empty()?;
@@ -330,7 +330,9 @@ macro_rules! seal_module {
             /// the public key associated with the provided private key and stores both in a
             /// [`Keypair`]. This is useful if you know your private key, but don't have the
             /// corresponding public key.
-            pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, AlkaliError> {
+            pub fn from_private_key(
+                private_key: &PrivateKey<impl mem::MprotectReadable>,
+            ) -> Result<Self, AlkaliError> {
                 require_init()?;
 
                 let mut public_key = [0u8; PUBLIC_KEY_LENGTH];

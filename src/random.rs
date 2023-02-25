@@ -181,7 +181,10 @@ pub fn fill_random(buf: &mut [u8]) -> Result<(), AlkaliError> {
 ///
 /// Returns an [`AlkaliError`] if Sodium could not be correctly initialised, or if too many bytes
 /// were requested from this seed.
-pub fn fill_random_from_seed(buf: &mut [u8], seed: &Seed) -> Result<usize, AlkaliError> {
+pub fn fill_random_from_seed(
+    buf: &mut [u8],
+    seed: &Seed<impl mem::MprotectReadable>,
+) -> Result<usize, AlkaliError> {
     require_init()?;
 
     // We can only safely generate up to 2^38 bytes of pseudo-random data from a given seed. This

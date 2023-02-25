@@ -199,7 +199,7 @@ macro_rules! cipher_module {
             pub Key(KEY_LENGTH);
         }
 
-        impl Key {
+        impl Key<mem::FullAccess> {
             /// Generate a new, random key for use in symmetric AE.
             pub fn generate() -> Result<Self, AlkaliError> {
                 require_init()?;
@@ -272,7 +272,7 @@ macro_rules! cipher_module {
         /// unless you have good reason to do otherwise.
         pub fn encrypt(
             message: &[u8],
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: Option<&Nonce>,
             output: &mut [u8],
         ) -> Result<(usize, Nonce), AlkaliError> {
@@ -337,7 +337,7 @@ macro_rules! cipher_module {
         /// will always be `ciphertext.len()` - [`MAC_LENGTH`] bytes).
         pub fn decrypt(
             ciphertext: &[u8],
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: &Nonce,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {
@@ -419,7 +419,7 @@ macro_rules! cipher_module {
         /// unless you have good reason to do otherwise.
         pub fn encrypt_detached(
             message: &[u8],
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: Option<&Nonce>,
             output: &mut [u8],
         ) -> Result<(usize, Nonce, MAC), AlkaliError> {
@@ -490,7 +490,7 @@ macro_rules! cipher_module {
         pub fn decrypt_detached(
             ciphertext: &[u8],
             mac: &MAC,
-            key: &Key,
+            key: &Key<impl mem::MprotectReadable>,
             nonce: &Nonce,
             output: &mut [u8],
         ) -> Result<usize, AlkaliError> {

@@ -213,7 +213,7 @@ pub mod blake2b {
         pub Key(KEY_LENGTH_DEFAULT);
     }
 
-    impl Key {
+    impl Key<mem::FullAccess> {
         /// Generate a new, random key for use with the keyed variant of the hash function.
         pub fn generate() -> Result<Self, AlkaliError> {
             require_init()?;

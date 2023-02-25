@@ -214,7 +214,7 @@ pub mod x25519blake2b {
     #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
-        pub private_key: PrivateKey,
+        pub private_key: PrivateKey<mem::FullAccess>,
 
         /// The public key corresponding to the private key.
         pub public_key: PublicKey,
@@ -261,7 +261,7 @@ pub mod x25519blake2b {
         ///
         /// A keypair consists of a [`PrivateKey`], which must be kept secret, and a [`PublicKey`],
         /// which should be made public.
-        pub fn from_seed(seed: &Seed) -> Result<Self, AlkaliError> {
+        pub fn from_seed(seed: &Seed<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
             require_init()?;
 
             let mut private_key = PrivateKey::new_empty()?;
@@ -300,7 +300,9 @@ pub mod x25519blake2b {
         /// public key associated with the provided private key and stores both in a [`Keypair`].
         /// This is useful if you know your private key, but don't have the corresponding public
         /// key.
-        pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, AlkaliError> {
+        pub fn from_private_key(
+            private_key: &PrivateKey<impl mem::MprotectReadable>,
+        ) -> Result<Self, AlkaliError> {
             require_init()?;
 
             let mut public_key = [0u8; PUBLIC_KEY_LENGTH];
@@ -345,7 +347,8 @@ pub mod x25519blake2b {
         pub fn client_keys(
             &self,
             server_pub: &PublicKey,
-        ) -> Result<(TransmitKey, ReceiveKey), AlkaliError> {
+        ) -> Result<(TransmitKey<mem::FullAccess>, ReceiveKey<mem::FullAccess>), AlkaliError>
+        {
             require_init()?;
 
             let mut tx = TransmitKey::new_empty()?;
@@ -399,7 +402,8 @@ pub mod x25519blake2b {
         pub fn server_keys(
             &self,
             client_pub: &PublicKey,
-        ) -> Result<(TransmitKey, ReceiveKey), AlkaliError> {
+        ) -> Result<(TransmitKey<mem::FullAccess>, ReceiveKey<mem::FullAccess>), AlkaliError>
+        {
             require_init()?;
 
             let mut tx = TransmitKey::new_empty()?;

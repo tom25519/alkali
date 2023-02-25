@@ -59,7 +59,7 @@ mem::hardened_buffer! {
     pub UnreducedScalar(UNREDUCED_SCALAR_LENGTH);
 }
 
-impl Scalar {
+impl Scalar<mem::FullAccess> {
     /// Generate a random scalar value for use with Ristretto255.
     ///
     /// The generated scalar will be between 0 and `L = 2^252 +
@@ -86,7 +86,9 @@ impl Scalar {
     /// The [`UnreducedScalar`] type is much larger than the [`Scalar`] type (64 bytes vs 32 bytes).
     /// Bits of `unreduced` can be set to zero, but the interval `unreduced` is sampled from should
     /// be at least 317 bits to ensure uniformity of the output over `L`.
-    pub fn reduce_from(unreduced: &UnreducedScalar) -> Result<Scalar, AlkaliError> {
+    pub fn reduce_from(
+        unreduced: &UnreducedScalar<impl mem::MprotectReadable>,
+    ) -> Result<Self, AlkaliError> {
         require_init()?;
 
         let mut scalar = Self::new_empty()?;
@@ -204,7 +206,7 @@ impl Scalar {
     /// Add `s` to this value, modulo `L = 2^252 + 27742317777372353535851937790883648493`.
     ///
     /// Computes `q = p + s (mod L)`, where `p` is this scalar, and sets `self` to `q`.
-    pub fn add(&mut self, s: &Scalar) -> Result<(), AlkaliError> {
+    pub fn add(&mut self, s: &Scalar<impl mem::MprotectReadable>) -> Result<(), AlkaliError> {
         require_init()?;
 
         let mut buf = [0u8; SCALAR_LENGTH];
@@ -232,7 +234,7 @@ impl Scalar {
     /// Subtract `s` from this value, modulo `L = 2^252 + 27742317777372353535851937790883648493`.
     ///
     /// Computes `q = p - s (mod L)`, where `p` is this scalar, and sets `self` to `q`.
-    pub fn sub(&mut self, s: &Scalar) -> Result<(), AlkaliError> {
+    pub fn sub(&mut self, s: &Scalar<impl mem::MprotectReadable>) -> Result<(), AlkaliError> {
         require_init()?;
 
         let mut buf = [0u8; SCALAR_LENGTH];
@@ -260,7 +262,7 @@ impl Scalar {
     /// Multiply this value by `s`, modulo `L = 2^252 + 27742317777372353535851937790883648493`.
     ///
     /// Computes `q = p * s (mod L)`, where `p` is this scalar, and sets `self` to `q`.
-    pub fn mul(&mut self, s: &Scalar) -> Result<(), AlkaliError> {
+    pub fn mul(&mut self, s: &Scalar<impl mem::MprotectReadable>) -> Result<(), AlkaliError> {
         require_init()?;
 
         let mut buf = [0u8; SCALAR_LENGTH];
@@ -376,7 +378,7 @@ impl Point {
     ///
     /// Returns the result of the scalar multiplication (a new point on the curve), or an error if
     /// this point is not a valid representation of a point on Ristretto255.
-    pub fn scalar_mult(&self, n: &Scalar) -> Result<Self, AlkaliError> {
+    pub fn scalar_mult(&self, n: &Scalar<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
         require_init()?;
 
         let mut q = [0; POINT_LENGTH];
@@ -412,7 +414,10 @@ impl Point {
     ///
     /// This function is equivalent to [`Self::scalar_mult`], but modifies `self` in place, rather
     /// than returning the new point.
-    pub fn scalar_mult_in_place(&mut self, n: &Scalar) -> Result<(), AlkaliError> {
+    pub fn scalar_mult_in_place(
+        &mut self,
+        n: &Scalar<impl mem::MprotectReadable>,
+    ) -> Result<(), AlkaliError> {
         let q = self.scalar_mult(n)?;
         self.0 = q.0;
         Ok(())
@@ -497,7 +502,7 @@ impl Point {
 /// Finding `n` given `Q` and `G` is the elliptic curve discrete logarithm problem, so it is
 /// computationally infeasible to find `n`. This can be used to compute the public key corresponding
 /// to the secret key `n`.
-pub fn scalar_mult_base(n: &Scalar) -> Result<Point, AlkaliError> {
+pub fn scalar_mult_base(n: &Scalar<impl mem::MprotectReadable>) -> Result<Point, AlkaliError> {
     require_init()?;
 
     let mut q = [0u8; POINT_LENGTH];

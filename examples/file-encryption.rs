@@ -24,6 +24,7 @@
 //! ```
 
 use alkali::hash::pbkdf;
+use alkali::mem;
 use alkali::symmetric::cipher_stream;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -33,7 +34,10 @@ const CHUNK_SIZE: usize = 4096;
 
 /// Uses a Password-Based Key Derivation Function to derive an encryption key from the provided
 /// password.
-fn derive_key_from_password(password: &[u8], salt: &pbkdf::Salt) -> cipher_stream::Key {
+fn derive_key_from_password(
+    password: &[u8],
+    salt: &pbkdf::Salt,
+) -> cipher_stream::Key<mem::FullAccess> {
     let mut key = cipher_stream::Key::new_empty().unwrap();
 
     println!("Deriving key...");

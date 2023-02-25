@@ -49,7 +49,7 @@ mem::hardened_buffer! {
     pub Scalar(SCALAR_LENGTH);
 }
 
-impl Scalar {
+impl Scalar<mem::FullAccess> {
     /// Generate a random scalar value for use with Curve25519.
     pub fn generate() -> Result<Self, AlkaliError> {
         let mut n = Self::new_empty()?;
@@ -82,7 +82,7 @@ impl Point {
     ///
     /// Returns the result of the scalar multiplication (a new point on the curve), or an error if
     /// `P` is of low order.
-    pub fn scalar_mult(&self, n: &Scalar) -> Result<Self, AlkaliError> {
+    pub fn scalar_mult(&self, n: &Scalar<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
         require_init()?;
 
         let mut q = [0u8; POINT_LENGTH];
@@ -118,7 +118,10 @@ impl Point {
     ///
     /// This function is equivalent to [`Self::scalar_mult`], but modifies `self` in place, rather
     /// than returning the new point.
-    pub fn scalar_mult_in_place(&mut self, n: &Scalar) -> Result<(), AlkaliError> {
+    pub fn scalar_mult_in_place(
+        &mut self,
+        n: &Scalar<impl mem::MprotectReadable>,
+    ) -> Result<(), AlkaliError> {
         let q = self.scalar_mult(n)?;
         self.0 = q.0;
         Ok(())
@@ -140,7 +143,7 @@ impl Point {
 /// before multiplying.
 ///
 /// Returns the result of the scalar multiplication (a new point on the curve).
-pub fn scalar_mult_base(n: &Scalar) -> Result<Point, AlkaliError> {
+pub fn scalar_mult_base(n: &Scalar<impl mem::MprotectReadable>) -> Result<Point, AlkaliError> {
     require_init()?;
 
     let mut q = [0u8; POINT_LENGTH];

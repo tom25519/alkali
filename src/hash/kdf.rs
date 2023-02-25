@@ -111,7 +111,7 @@ pub mod blake2b {
         pub Key(KEY_LENGTH);
     }
 
-    impl Key {
+    impl Key<mem::FullAccess> {
         /// Generate a new, random key from which subkeys can be derived.
         pub fn generate() -> Result<Self, AlkaliError> {
             require_init()?;
@@ -146,7 +146,7 @@ pub mod blake2b {
     /// incrementing for each subkey you need. So `1` would produce the first subkey, `2` the
     /// second, and so on.
     pub fn derive_subkey(
-        key: &Key,
+        key: &Key<impl mem::MprotectReadable>,
         context: &[u8; CONTEXT_LENGTH],
         subkey_id: u64,
         subkey: &mut [u8],

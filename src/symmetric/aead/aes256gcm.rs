@@ -94,7 +94,7 @@ mem::hardened_buffer! {
     pub Key(KEY_LENGTH);
 }
 
-impl Key {
+impl Key<mem::FullAccess> {
     /// Generate a new, random key for use with this AEAD construction.
     pub fn generate() -> Result<Self, AlkaliError> {
         require_init()?;
@@ -189,7 +189,7 @@ pub fn increment_nonce(nonce: &mut Nonce) -> Result<(), AlkaliError> {
 pub fn encrypt(
     message: &[u8],
     ad: Option<&[u8]>,
-    key: &Key,
+    key: &Key<impl mem::MprotectReadable>,
     nonce: &Nonce,
     output: &mut [u8],
 ) -> Result<usize, AlkaliError> {
@@ -274,7 +274,7 @@ pub fn encrypt(
 pub fn decrypt(
     ciphertext: &[u8],
     ad: Option<&[u8]>,
-    key: &Key,
+    key: &Key<impl mem::MprotectReadable>,
     nonce: &Nonce,
     output: &mut [u8],
 ) -> Result<usize, AlkaliError> {
@@ -379,7 +379,7 @@ pub fn decrypt(
 pub fn encrypt_detached(
     message: &[u8],
     ad: Option<&[u8]>,
-    key: &Key,
+    key: &Key<impl mem::MprotectReadable>,
     nonce: &Nonce,
     output: &mut [u8],
 ) -> Result<(usize, MAC), AlkaliError> {
@@ -468,7 +468,7 @@ pub fn decrypt_detached(
     ciphertext: &[u8],
     ad: Option<&[u8]>,
     mac: &MAC,
-    key: &Key,
+    key: &Key<impl mem::MprotectReadable>,
     nonce: &Nonce,
     output: &mut [u8],
 ) -> Result<usize, AlkaliError> {

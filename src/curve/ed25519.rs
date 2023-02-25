@@ -64,7 +64,7 @@ mem::hardened_buffer! {
     pub UnreducedScalar(UNREDUCED_SCALAR_LENGTH);
 }
 
-impl Scalar {
+impl Scalar<mem::FullAccess> {
     /// Generate a random scalar value for use with Ed25519.
     ///
     /// The generated scalar will be between 0 and `L = 2^252 +
@@ -91,7 +91,9 @@ impl Scalar {
     /// The [`UnreducedScalar`] type is much larger than the [`Scalar`] type (64 bytes vs 32 bytes).
     /// Bits of `unreduced` can be set to zero, but the interval `unreduced` is sampled from should
     /// be at least 317 bits to ensure uniformity of the output over `L`.
-    pub fn reduce_from(unreduced: &UnreducedScalar) -> Result<Scalar, AlkaliError> {
+    pub fn reduce_from(
+        unreduced: &UnreducedScalar<impl mem::MprotectReadable>,
+    ) -> Result<Self, AlkaliError> {
         require_init()?;
 
         let mut scalar = Self::new_empty()?;
@@ -114,7 +116,7 @@ impl Scalar {
     }
 
     /// Convert this Ed25519 secret key to a Curve25519 secret key.
-    pub fn to_curve25519(&self) -> Result<curve25519::Scalar, AlkaliError> {
+    pub fn to_curve25519(&self) -> Result<curve25519::Scalar<mem::FullAccess>, AlkaliError> {
         require_init()?;
 
         let mut s = curve25519::Scalar::new_empty()?;
@@ -234,7 +236,7 @@ impl Scalar {
     /// Add `s` to this value, modulo `L = 2^252 + 27742317777372353535851937790883648493`.
     ///
     /// Computes `q = p + s (mod L)`, where `p` is this scalar, and sets `self` to `q`.
-    pub fn add(&mut self, s: &Scalar) -> Result<(), AlkaliError> {
+    pub fn add(&mut self, s: &Scalar<impl mem::MprotectReadable>) -> Result<(), AlkaliError> {
         require_init()?;
 
         let mut buf = [0u8; SCALAR_LENGTH];
@@ -262,7 +264,7 @@ impl Scalar {
     /// Subtract `s` from this value, modulo `L = 2^252 + 27742317777372353535851937790883648493`.
     ///
     /// Computes `q = p - s (mod L)`, where `p` is this scalar, and sets `self` to `q`.
-    pub fn sub(&mut self, s: &Scalar) -> Result<(), AlkaliError> {
+    pub fn sub(&mut self, s: &Scalar<impl mem::MprotectReadable>) -> Result<(), AlkaliError> {
         require_init()?;
 
         let mut buf = [0u8; SCALAR_LENGTH];
@@ -290,7 +292,7 @@ impl Scalar {
     /// Multiply this value by `s`, modulo `L = 2^252 + 27742317777372353535851937790883648493`.
     ///
     /// Computes `q = p * s (mod L)`, where `p` is this scalar, and sets `self` to `q`.
-    pub fn mul(&mut self, s: &Scalar) -> Result<(), AlkaliError> {
+    pub fn mul(&mut self, s: &Scalar<impl mem::MprotectReadable>) -> Result<(), AlkaliError> {
         require_init()?;
 
         let mut buf = [0u8; SCALAR_LENGTH];
@@ -431,7 +433,7 @@ impl Point {
     ///
     /// Returns the result of the scalar multiplication (a new point on the curve), or an error if
     /// this point is not on the curve, is of low order, or is not in canonical form.
-    pub fn scalar_mult(&self, n: &Scalar) -> Result<Self, AlkaliError> {
+    pub fn scalar_mult(&self, n: &Scalar<impl mem::MprotectReadable>) -> Result<Self, AlkaliError> {
         require_init()?;
 
         let mut q = [0u8; POINT_LENGTH];
@@ -467,7 +469,10 @@ impl Point {
     ///
     /// This function is equivalent to [`Self::scalar_mult`], but modifies `self` in place, rather
     /// than returning the new point.
-    pub fn scalar_mult_in_place(&mut self, n: &Scalar) -> Result<(), AlkaliError> {
+    pub fn scalar_mult_in_place(
+        &mut self,
+        n: &Scalar<impl mem::MprotectReadable>,
+    ) -> Result<(), AlkaliError> {
         let q = self.scalar_mult(n)?;
         self.0 = q.0;
         Ok(())
@@ -478,7 +483,10 @@ impl Point {
     /// This function is equivalent to [`Self::scalar_mult`], but `n` will not be
     /// [clamped](https://www.jcraige.com/an-explainer-on-ed25519-clamping) before multiplying. Use
     /// [`Point::scalar_mult`] if clamping is required.
-    pub fn scalar_mult_no_clamp(&self, n: &Scalar) -> Result<Self, AlkaliError> {
+    pub fn scalar_mult_no_clamp(
+        &self,
+        n: &Scalar<impl mem::MprotectReadable>,
+    ) -> Result<Self, AlkaliError> {
         require_init()?;
 
         let mut q = [0u8; POINT_LENGTH];
@@ -514,7 +522,10 @@ impl Point {
     ///
     /// This function is equivalent to [`Self::scalar_mult_no_clamp`], but modifies `self` in place,
     /// rather than returning the new point.
-    pub fn scalar_mult_in_place_no_clamp(&mut self, n: &Scalar) -> Result<(), AlkaliError> {
+    pub fn scalar_mult_in_place_no_clamp(
+        &mut self,
+        n: &Scalar<impl mem::MprotectReadable>,
+    ) -> Result<(), AlkaliError> {
         let q = self.scalar_mult_no_clamp(n)?;
         self.0 = q.0;
         Ok(())
@@ -605,7 +616,7 @@ impl Point {
 ///
 /// `n` will be [clamped](https://www.jcraige.com/an-explainer-on-ed25519-clamping) before
 /// multiplying. Use [`scalar_mult_base_no_clamp`] if clamping is not required for your application.
-pub fn scalar_mult_base(n: &Scalar) -> Result<Point, AlkaliError> {
+pub fn scalar_mult_base(n: &Scalar<impl mem::MprotectReadable>) -> Result<Point, AlkaliError> {
     require_init()?;
 
     let mut q = [0u8; POINT_LENGTH];
@@ -634,7 +645,9 @@ pub fn scalar_mult_base(n: &Scalar) -> Result<Point, AlkaliError> {
 /// This function is equivalent to [`scalar_mult_base`], but `n` will not be
 /// [clamped](https://www.jcraige.com/an-explainer-on-ed25519-clamping) before multiplying. Use
 /// [`scalar_mult_base`] if clamping is required.
-pub fn scalar_mult_base_no_clamp(n: &Scalar) -> Result<Point, AlkaliError> {
+pub fn scalar_mult_base_no_clamp(
+    n: &Scalar<impl mem::MprotectReadable>,
+) -> Result<Point, AlkaliError> {
     require_init()?;
 
     let mut q = [0u8; POINT_LENGTH];
