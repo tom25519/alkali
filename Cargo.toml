@@ -19,11 +19,11 @@ libc = { version = "0.2", default-features = false }
 libsodium-sys-stable = "1.19"
 rand_core = { version = "0.6" }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-serde-big-array = { version = "0.4", optional = true }
+serde-big-array = { version = "0.5", optional = true }
 
 [dev-dependencies]
 rand = "0.8"
-rpassword = "5.0"
+rpassword = "7.2"
 
 [features]
 aead-chacha20 = []

@@ -169,7 +169,7 @@ fn main() {
     }
 
     // Ask the user to input a password for encryption
-    let mut password = rpassword::read_password_from_tty(Some("Password: "))
+    let mut password = rpassword::prompt_password("Password: ")
         .unwrap()
         .into_bytes();
 
