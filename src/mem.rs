@@ -258,14 +258,15 @@ macro_rules! hardened_buffer {
             /// # Safety
             /// It is safe to transfer ownership between threads because we have exclusive access to
             /// the inner pointer.
-            /// As long as we respect rust borrowing rules, there is no way the internal pointer can be freed
-            /// more than once.
+            /// As long as we respect rust borrowing rules, there is no way the internal pointer can
+            /// be freed more than once.
             unsafe impl core::marker::Send for $name {}
+
             /// # Safety
-            /// A read-only reference is safe to send across multiple threads because we have exclusive
-            /// access to the inner pointer.
-            /// As long as we respect rust borrowing rules, there is no way the internal pointer can be freed
-            /// more than once.
+            /// A read-only reference is safe to send across multiple threads because we have
+            /// exclusive access to the inner pointer.
+            /// As long as we respect rust borrowing rules, there is no way the internal pointer can
+            /// be freed more than once.
             unsafe impl core::marker::Sync for $name {}
 
             impl Drop for $name {
@@ -330,7 +331,9 @@ macro_rules! hardened_buffer {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
                         // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
+                        // the struct, so it will always point to valid memory. Since we have an
+                        // exclusive reference to self, `&mut self`, we can only give out one
+                        // exclusive reference to the backing memory at a time. Any region of
                         // memory of length $size is a valid representation of a [u8; $size], so
                         // initialisation & alignment issues are not a concern.
                         self.ptr.as_mut()
@@ -344,7 +347,10 @@ macro_rules! hardened_buffer {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
                         // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
+                        // the struct, so it will always point to valid memory. Since we have a
+                        // shared reference to self, `&self`, there is no mutable reference to
+                        // `self` in scope, and therefore no mutable reference to the backing
+                        // memory. So it's safe to give out a shared reference. Any region of
                         // memory of length $size is a valid representation of a [u8; $size], so
                         // initialisation & alignment issues are not a concern.
                         self.ptr.as_ref()
@@ -358,7 +364,10 @@ macro_rules! hardened_buffer {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
                         // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
+                        // the struct, so it will always point to valid memory. Since we have a
+                        // shared reference to self, `&self`, there is no mutable reference to
+                        // `self` in scope, and therefore no mutable reference to the backing
+                        // memory. So it's safe to give out a shared reference. Any region of
                         // memory of length $size is a valid representation of a [u8; $size], so
                         // initialisation & alignment issues are not a concern.
                         self.ptr.as_ref()
@@ -372,7 +381,9 @@ macro_rules! hardened_buffer {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
                         // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
+                        // the struct, so it will always point to valid memory. Since we have an
+                        // exclusive reference to self, `&mut self`, we can only give out one
+                        // exclusive reference to the backing memory at a time. Any region of
                         // memory of length $size is a valid representation of a [u8; $size], so
                         // initialisation & alignment issues are not a concern.
                         self.ptr.as_mut()
@@ -397,7 +408,10 @@ macro_rules! hardened_buffer {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
                         // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
+                        // the struct, so it will always point to valid memory. Since we have a
+                        // shared reference to self, `&self`, there is no mutable reference to
+                        // `self` in scope, and therefore no mutable reference to the backing
+                        // memory. So it's safe to give out a shared reference. Any region of
                         // memory of length $size is a valid representation of a [u8; $size], so
                         // initialisation & alignment issues are not a concern.
                         self.ptr.as_ref()
@@ -405,6 +419,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
+            /// This implementation of `Eq` is constant-time.
             impl core::cmp::Eq for $name {}
 
             impl core::ops::DerefMut for $name {
@@ -413,7 +428,9 @@ macro_rules! hardened_buffer {
                         // SAFETY: The memory backing this buffer is valid for the lifetime of the
                         // struct. Implicitly, since we don't specify a lifetime for the reference
                         // we return here, this reference is also only valid for the lifetime of
-                        // the struct, so it will always point to valid memory. Any region of
+                        // the struct, so it will always point to valid memory. Since we have an
+                        // exclusive reference to self, `&mut self`, we can only give out one
+                        // exclusive reference to the backing memory at a time. Any region of
                         // memory of length $size is a valid representation of a [u8; $size], so
                         // initialisation & alignment issues are not a concern.
                         self.ptr.as_mut()
@@ -421,6 +438,7 @@ macro_rules! hardened_buffer {
                 }
             }
 
+            /// This implementation of `PartialEq` is constant-time.
             impl core::cmp::PartialEq<Self> for $name {
                 fn eq(&self, other: &Self) -> bool {
                     $crate::mem::eq(self.as_ref(), other.as_ref()).unwrap()
