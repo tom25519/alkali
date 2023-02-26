@@ -44,7 +44,6 @@
 //! this if you wish to make use of the API, but it will cause builds to fail on stable Rust.
 
 // TODO: Testing for SodiumAllocator, HardenedBox, HardenedVec, hardened_buffer, anon_buffer
-// TODO: Protected types for hardened_buffer (noaccess/readonly)
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -174,6 +173,36 @@ pub struct NoAccess;
 
 impl MprotectStatus for NoAccess {}
 
+/// Trait for types which are protected with mprotect, and can be unprotected.
+///
+/// Used to convert a [`ReadOnly`] or [`NoAccess`] buffer into a [`FullAccess`] buffer.
+pub trait Unprotect {
+    type Output;
+
+    /// Remove the read-only or no-access protection from this buffer.
+    fn unprotect(self) -> Result<Self::Output, AlkaliError>;
+}
+
+/// Trait for types which can be made read-only via mprotect.
+///
+/// Used to convert a [`FullAccess`] or [`NoAccess`] buffer into a [`ReadOnly`] buffer.
+pub trait ProtectReadOnly {
+    type Output;
+
+    /// Make this buffer read-only.
+    fn protect_read_only(self) -> Result<Self::Output, AlkaliError>;
+}
+
+/// Trait for types which can be made inaccessible via mprotect.
+///
+/// Used to convert a [`FullAccess`] or [`ReadOnly`] buffer into a [`NoAccess`] buffer.
+pub trait ProtectNoAccess {
+    type Output;
+
+    /// Make this buffer inaccessible.
+    fn protect_no_access(self) -> Result<Self::Output, AlkaliError>;
+}
+
 /// Creates a hardened buffer type, for storing sensitive data (keys, passwords, etc).
 ///
 /// As per the rationale presented in the [`mem`](crate::mem) module, it is often necessary to take
@@ -249,10 +278,13 @@ macro_rules! hardened_buffer {
                 _mprotect: core::marker::PhantomData<Mprotect>,
             }
 
+            #[allow(dead_code)]
             impl<Mprotect: $crate::mem::MprotectStatus> $name<Mprotect> {
+                /// The number of bytes this type stores.
                 pub const LENGTH: usize = $size as usize;
             }
 
+            #[allow(dead_code)]
             impl $name<$crate::mem::FullAccess> {
                 /// Create a new instance of this type, filled with all zeroes.
                 pub fn new_empty() -> Result<Self, $crate::AlkaliError> {
@@ -302,12 +334,102 @@ macro_rules! hardened_buffer {
                 /// remain valid until it is dropped, so anywhere this method is used, the memory
                 /// must not be freed. Furthermore, the memory is only valid for the lifetime of
                 /// this struct, so after it is dropped, this pointer must not be used again.
-                #[allow(dead_code)]
                 unsafe fn inner_mut(&mut self) -> *mut [u8; $size] {
                     self.ptr.as_mut()
                 }
             }
 
+            impl<Mprotect: $crate::mem::MprotectStatus> $crate::mem::Unprotect for $name<Mprotect> {
+                type Output = $name<$crate::mem::FullAccess>;
+
+                fn unprotect(mut self) -> Result<$name<$crate::mem::FullAccess>, $crate::AlkaliError> {
+                    let mprotect_result = unsafe {
+                        // SAFETY: This function expects a pointer to a region of memory previously
+                        // allocated using `sodium_malloc`. The only way to construct an instance of
+                        // this type is to allocate such a region of memory (via `new_empty`), so
+                        // this pointer is guaranteed to be valid to use here.
+                        libsodium_sys::sodium_mprotect_readwrite(self.ptr.as_mut() as *mut u8 as *mut libc::c_void)
+                    };
+                    if mprotect_result < 0 {
+                        return Err($crate::AlkaliError::MprotectFailed);
+                    }
+
+                    // The `Drop` trait for hardened buffers frees the memory pointed to by
+                    // `self.ptr`. We want to reuse the memory with our new buffer, so avoid calling
+                    // the destructor on `self` by forgetting it. The memory will be freed when the
+                    // new buffer is dropped.
+                    let ptr = self.ptr;
+                    core::mem::forget(self);
+
+                    Ok($name {
+                        ptr,
+                        _marker: core::marker::PhantomData,
+                        _mprotect: core::marker::PhantomData,
+                    })
+                }
+            }
+
+            impl<Mprotect: $crate::mem::MprotectStatus> $crate::mem::ProtectReadOnly for $name<Mprotect> {
+                type Output = $name<$crate::mem::ReadOnly>;
+
+                fn protect_read_only(mut self) -> Result<$name<$crate::mem::ReadOnly>, $crate::AlkaliError> {
+                    let mprotect_result = unsafe {
+                        // SAFETY: This function expects a pointer to a region of memory previously
+                        // allocated using `sodium_malloc`. The only way to construct an instance of
+                        // this type is to allocate such a region of memory (via `new_empty`), so
+                        // this pointer is guaranteed to be valid to use here.
+                        libsodium_sys::sodium_mprotect_readonly(self.ptr.as_mut() as *mut u8 as *mut libc::c_void)
+                    };
+                    if mprotect_result < 0 {
+                        return Err($crate::AlkaliError::MprotectFailed);
+                    }
+
+                    // The `Drop` trait for hardened buffers frees the memory pointed to by
+                    // `self.ptr`. We want to reuse the memory with our new buffer, so avoid calling
+                    // the destructor on `self` by forgetting it. The memory will be freed when the
+                    // new buffer is dropped.
+                    let ptr = self.ptr;
+                    core::mem::forget(self);
+
+                    Ok($name {
+                        ptr,
+                        _marker: core::marker::PhantomData,
+                        _mprotect: core::marker::PhantomData,
+                    })
+                }
+            }
+
+            impl<Mprotect: $crate::mem::MprotectStatus> $crate::mem::ProtectNoAccess for $name<Mprotect> {
+                type Output = $name<$crate::mem::NoAccess>;
+
+                fn protect_no_access(mut self) -> Result<$name<$crate::mem::NoAccess>, $crate::AlkaliError> {
+                    let mprotect_result = unsafe {
+                        // SAFETY: This function expects a pointer to a region of memory previously
+                        // allocated using `sodium_malloc`. The only way to construct an instance of
+                        // this type is to allocate such a region of memory (via `new_empty`), so
+                        // this pointer is guaranteed to be valid to use here.
+                        libsodium_sys::sodium_mprotect_noaccess(self.ptr.as_mut() as *mut u8 as *mut libc::c_void)
+                    };
+                    if mprotect_result < 0 {
+                        return Err($crate::AlkaliError::MprotectFailed);
+                    }
+
+                    // The `Drop` trait for hardened buffers frees the memory pointed to by
+                    // `self.ptr`. We want to reuse the memory with our new buffer, so avoid calling
+                    // the destructor on `self` by forgetting it. The memory will be freed when the
+                    // new buffer is dropped.
+                    let ptr = self.ptr;
+                    core::mem::forget(self);
+
+                    Ok($name {
+                        ptr,
+                        _marker: core::marker::PhantomData,
+                        _mprotect: core::marker::PhantomData,
+                    })
+                }
+            }
+
+            #[allow(dead_code)]
             impl<Mprotect: $crate::mem::MprotectReadable> $name<Mprotect> {
                 /// Create a new instance of the same type, copying the contents of this buffer.
                 ///
@@ -326,7 +448,6 @@ macro_rules! hardened_buffer {
                 /// remain valid until it is dropped, so anywhere this method is used, the memory
                 /// must not be freed. Furthermore, the memory is only valid for the lifetime of
                 /// this struct, so after it is dropped, this pointer must not be used again.
-                #[allow(dead_code)]
                 unsafe fn inner(&self) -> *const [u8; $size] {
                     self.ptr.as_ptr()
                 }
@@ -781,6 +902,7 @@ mod tests {
     // This set of tests relies on having at least 1 MiB of memory available to allocate.
     // Therefore, these tests may fail on platforms with very limited resources.
     use super::{clear, eq, free, is_zero, malloc};
+    use crate::mem::{ProtectNoAccess, ProtectReadOnly, Unprotect};
     use crate::{random, AlkaliError};
     use core::ptr::NonNull;
 
@@ -866,6 +988,30 @@ mod tests {
             clear(&mut buf[..l])?;
             assert!(is_zero(&buf[..l])?);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn mprotect() -> Result<(), AlkaliError> {
+        let buf = anon_buffer!(32)?;
+        // should be permissible to mprotect a buffer to the same protection status
+        let mut buf = buf.unprotect()?;
+        buf.copy_from_slice(b"00001111222233334444555566667777");
+
+        let buf = buf.protect_read_only()?;
+        assert_eq!(&buf[..], b"00001111222233334444555566667777");
+        let mut buf = buf.unprotect()?;
+        buf.copy_from_slice(b"11112222333344445555666677778888");
+        assert_eq!(&buf[..], b"11112222333344445555666677778888");
+
+        let buf = buf.protect_no_access()?;
+        let buf = buf.unprotect()?;
+        assert_eq!(&buf[..], b"11112222333344445555666677778888");
+        let buf = buf.protect_read_only()?;
+        let buf = buf.protect_no_access()?;
+        let buf = buf.protect_read_only()?;
+        assert_eq!(&buf[..], b"11112222333344445555666677778888");
 
         Ok(())
     }

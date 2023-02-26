@@ -232,6 +232,14 @@ define_alkali_error! {
     MemoryManagement,
 
     basic
+    /// Failed to protect a region of memory.
+    ///
+    /// This will result from calling `into_readonly` or `into_noaccess` on a hardened buffer type.
+    /// This can occur if the current platform does not support `mprotect`/`VirtualProtect`, or if
+    /// an internal error occurred in the underlying `mprotect`/`VirtualProtect` call.
+    MprotectFailed,
+
+    basic
     /// Tried to create a hardened buffer from an incorrectly sized slice.
     IncorrectSliceLength,
 
