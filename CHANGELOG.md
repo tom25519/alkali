@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+* Typed support for protecting hardened buffers via the `sodium_mprotect` API
+  * The `alkali::mem` module now includes a number of marker types and traits to indicate the protection status of a
+    hardened buffer
+  * Hardened buffers now have an extra generic parameter `Mprotect`, which implements `alkali::mem::MprotectStatus`,
+    indicating the protection status of the buffer (`alkali::mem::FullAccess`, `alkali::mem::ReadOnly`, or
+    `alkali::mem::NoAccess`)
+  * The `alkali::mem::ProtectReadOnly`, `alkali::mem::ProtectNoAccess`, and `alkali::mem::Unprotect` traits have been
+    added, which can be used to protect or unprotect a hardened buffer
+  * The `alkali::mem::MprotectReadable` trait has been added, which is implemented by `alkali::mem::FullAccess` and
+    `alkali::mem::ReadOnly`, to indicate that a hardened buffer can be read from
+* **Breaking API changes**:
+  * Every hardened buffer type now has an extra generic parameter `Mprotect`, which implements
+    `alkali::mem::MprotectStatus`. The `new_empty` and `zero` methods are now only implemented for `Buffer<FullAccess>`.
+    The `try_clone` method is now only implemented for `Buffer<impl MprotectReadable>`. Trait implementations have also
+    changed.
+    * Affected types:
+      * `alkali::asymmetric::cipher::Keypair`, `alkali::asymmetric::cipher::PrivateKey`,
+        `alkali::asymmetric::cipher::Seed`, `alkali::asymmetric::cipher::SessionKey`
+      * `alkali::asymmetric::kx::Keypair`, `alkali::asymmetric::kx::PrivateKey`, `alkali::asymmetric::kx::ReceiveKey`,
+        `alkali::asymmetric::kx::Seed`, `alkali::asymmetric::kx::TransmitKey`
+      * `alkali::asymmetric::seal::Keypair`, `alkali::asymmetric::seal::PrivateKey`, alkali::asymmetric::seal::Seed`
+      * `alkali::asymmetric::sign::Keypair`, `alkali::asymmetric::sign::PrivateKey`, `alkali::asymmetric::sign::Seed`
+      * `alkali::curve::curve25519::Scalar`
+      * `alkali::curve::ed25519::Scalar`, `alkali::curve::ed25519::UnreducedScalar`
+      * `alkali::curve::ristretto255::Scalar`, `alkali::curve::ristretto255::UnreducedScalar`
+      * `alkali::hash::generic::Key`
+      * `alkali::hash::kdf::Key`
+      * `alkali::hash::short::Key`
+      * `alkali::random::Seed`
+      * `alkali::symmetric::aead::aes256gcm::Key`, `alkali::symmetric::aead::chacha20poly1305::Key`,
+        `alkali::symmetric::aead::chacha20poly1305_ietf::Key`, `alkali::symmetric::aead::xchacha20poly1305_ietf::Key`
+      * `alkali::symmetric::auth::Key`
+      * `alkali::symmetric::cipher::Key`
+      * `alkali::symmetric::cipher_stream::Key`
+      * `alkali::symmetric::one_time_auth::Key`
+      * `alkali::symmetric::stream::chacha20::Key`, `alkali::symmetric::stream::chacha20_ietf::Key`,
+        `alkali::symmetric::stream::salsa20::Key`, `alkali::symmetric::stream::salsa208::Key`,
+        `alkali::symmetric::stream::salsa2012::Key`, `alkali::symmetric::stream::xchacha20::Key`,
+        `alkali::symmetric::stream::xsalsa20::Key`
+    * Affected methods/functions:
+      * Too many to list: Any method or function making use of the above types has been affected
+
 ## 0.2.0 (2023-02-14)
 * Improved type safety for `kdf::derive_key` (Thank you @iazel!)
 * Removed a number of potential panics (Thank you @iazel!)
