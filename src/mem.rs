@@ -306,7 +306,7 @@ macro_rules! hardened_buffer {
                         // bytes of memory at `ptr` in the line above, and specify `$size` bytes
                         // should be cleared, so the amount of memory to clear here is correct. All
                         // zeroes is a valid representation of a `u8` slice.
-                        libsodium_sys::sodium_memzero(ptr.as_ptr() as *mut libc::c_void, $size);
+                        $crate::libsodium_sys::sodium_memzero(ptr.as_ptr() as *mut $crate::libc::c_void, $size);
 
                         ptr
                     };
@@ -348,7 +348,7 @@ macro_rules! hardened_buffer {
                         // allocated using `sodium_malloc`. The only way to construct an instance of
                         // this type is to allocate such a region of memory (via `new_empty`), so
                         // this pointer is guaranteed to be valid to use here.
-                        libsodium_sys::sodium_mprotect_readwrite(self.ptr.as_mut() as *mut u8 as *mut libc::c_void)
+                        $crate::libsodium_sys::sodium_mprotect_readwrite(self.ptr.as_mut() as *mut u8 as *mut $crate::libc::c_void)
                     };
                     if mprotect_result < 0 {
                         return Err($crate::AlkaliError::MprotectFailed);
@@ -378,7 +378,7 @@ macro_rules! hardened_buffer {
                         // allocated using `sodium_malloc`. The only way to construct an instance of
                         // this type is to allocate such a region of memory (via `new_empty`), so
                         // this pointer is guaranteed to be valid to use here.
-                        libsodium_sys::sodium_mprotect_readonly(self.ptr.as_mut() as *mut u8 as *mut libc::c_void)
+                        $crate::libsodium_sys::sodium_mprotect_readonly(self.ptr.as_mut() as *mut u8 as *mut $crate::libc::c_void)
                     };
                     if mprotect_result < 0 {
                         return Err($crate::AlkaliError::MprotectFailed);
@@ -408,7 +408,7 @@ macro_rules! hardened_buffer {
                         // allocated using `sodium_malloc`. The only way to construct an instance of
                         // this type is to allocate such a region of memory (via `new_empty`), so
                         // this pointer is guaranteed to be valid to use here.
-                        libsodium_sys::sodium_mprotect_noaccess(self.ptr.as_mut() as *mut u8 as *mut libc::c_void)
+                        $crate::libsodium_sys::sodium_mprotect_noaccess(self.ptr.as_mut() as *mut u8 as *mut $crate::libc::c_void)
                     };
                     if mprotect_result < 0 {
                         return Err($crate::AlkaliError::MprotectFailed);
@@ -651,10 +651,10 @@ macro_rules! hardened_buffer {
 
             #[cfg(feature = "use-serde")]
             #[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
-            impl<Mprotect: $crate::mem::MprotectReadable> serde::Serialize for $name<Mprotect> {
+            impl<Mprotect: $crate::mem::MprotectReadable> $crate::serde::Serialize for $name<Mprotect> {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
-                    S: serde::Serializer,
+                    S: $crate::serde::Serializer,
                 {
                     serializer.serialize_bytes(self.as_ref())
                 }
@@ -662,14 +662,14 @@ macro_rules! hardened_buffer {
 
             #[cfg(feature = "use-serde")]
             #[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
-            impl<'de> serde::Deserialize<'de> for $name<$crate::mem::FullAccess> {
+            impl<'de> $crate::serde::Deserialize<'de> for $name<$crate::mem::FullAccess> {
                 fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
                 where
-                    D: serde::Deserializer<'de>,
+                    D: $crate::serde::Deserializer<'de>,
                 {
                     struct BufVisitor;
 
-                    impl<'de> serde::de::Visitor<'de> for BufVisitor {
+                    impl<'de> $crate::serde::de::Visitor<'de> for BufVisitor {
                         type Value = $name<$crate::mem::FullAccess>;
 
                         fn expecting(
@@ -682,7 +682,7 @@ macro_rules! hardened_buffer {
 
                         fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
                         where
-                            E: serde::de::Error,
+                            E: $crate::serde::de::Error,
                         {
                             if v.len() != $size {
                                 return Err(E::invalid_length(v.len(), &self));
@@ -692,9 +692,9 @@ macro_rules! hardened_buffer {
 
                         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
                         where
-                            A: serde::de::SeqAccess<'de>,
+                            A: $crate::serde::de::SeqAccess<'de>,
                         {
-                            use serde::de::Error;
+                            use $crate::serde::de::Error;
 
                             if let Some(s) = seq.size_hint() {
                                 if s != $size {

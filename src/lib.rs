@@ -117,7 +117,14 @@
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
 #![cfg_attr(feature = "alloc", feature(nonnull_slice_from_raw_parts))]
 
-use libsodium_sys as sodium;
+// Hidden re-exports used in macros
+#[doc(hidden)]
+pub use libc;
+#[doc(hidden)]
+pub use libsodium_sys;
+#[doc(hidden)]
+#[cfg(feature = "use-serde")]
+pub use serde;
 
 pub mod asymmetric;
 #[cfg(feature = "curve")]
@@ -132,7 +139,7 @@ pub mod random;
 pub mod symmetric;
 pub mod util;
 
-pub use sodium::{
+pub use libsodium_sys::{
     SODIUM_LIBRARY_VERSION_MAJOR, SODIUM_LIBRARY_VERSION_MINOR, SODIUM_VERSION_STRING,
 };
 
@@ -419,7 +426,7 @@ pub fn require_init() -> Result<libc::c_int, AlkaliError> {
     let init_status = unsafe {
         // SAFETY: This function can safely be called multiple times from multiple threads. Once it
         // has been called, all other Sodium functions are also thread-safe.
-        sodium::sodium_init()
+        libsodium_sys::sodium_init()
     };
 
     // sodium_init() returns -1 on init failure, 0 on success, or 1 if Sodium is already
