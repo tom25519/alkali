@@ -537,12 +537,12 @@ impl<'de> serde::Deserialize<'de> for Point {
 
                 let mut p = [0u8; POINT_LENGTH];
 
-                for i in 0..POINT_LENGTH {
+                for (i, pb) in p.iter_mut().enumerate() {
                     let b = seq.next_element()?;
                     if b.is_none() {
                         return Err(A::Error::invalid_length(i, &self));
                     }
-                    p[i] = b.unwrap();
+                    *pb = b.unwrap();
                 }
 
                 if seq.next_element::<u8>()?.is_some() {
