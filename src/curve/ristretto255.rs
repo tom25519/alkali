@@ -294,8 +294,7 @@ pub struct Hash(
 
 /// A point on Ristretto255.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::unsafe_derive_deserialize)]
+#[cfg_attr(feature = "use-serde", derive(serde::Serialize))]
 pub struct Point(pub [u8; POINT_LENGTH]);
 
 impl Point {
@@ -486,6 +485,81 @@ impl Point {
         let q = self.sub(q)?;
         self.0 = q.0;
         Ok(())
+    }
+}
+
+#[cfg(feature = "use-serde")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "use-serde")))]
+impl<'de> serde::Deserialize<'de> for Point {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct PointVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for PointVisitor {
+            type Value = Point;
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+                formatter.write_str("a point on Ristretto255 encoded as a byte array of length 32")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v.len() != POINT_LENGTH {
+                    return Err(E::invalid_length(v.len(), &self));
+                }
+
+                let mut p = [0u8; POINT_LENGTH];
+                p.copy_from_slice(v);
+                let point = Point(p);
+
+                if !point.is_valid().map_err(E::custom)? {
+                    return Err(E::invalid_value(serde::de::Unexpected::Bytes(v), &self));
+                }
+
+                Ok(point)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                use serde::de::Error;
+
+                if let Some(s) = seq.size_hint() {
+                    if s != POINT_LENGTH {
+                        return Err(A::Error::invalid_length(s, &self));
+                    }
+                }
+
+                let mut p = [0u8; POINT_LENGTH];
+
+                for i in 0..POINT_LENGTH {
+                    let b = seq.next_element()?;
+                    if b.is_none() {
+                        return Err(A::Error::invalid_length(i, &self));
+                    }
+                    p[i] = b.unwrap();
+                }
+
+                if seq.next_element::<u8>()?.is_some() {
+                    return Err(A::Error::invalid_length(POINT_LENGTH + 1, &self));
+                }
+
+                let point = Point(p);
+
+                if !point.is_valid().map_err(A::Error::custom)? {
+                    return Err(A::Error::invalid_value(serde::de::Unexpected::Seq, &self));
+                }
+
+                Ok(point)
+            }
+        }
+
+        deserializer.deserialize_bytes(PointVisitor)
     }
 }
 
