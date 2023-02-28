@@ -11,6 +11,8 @@
     added, which can be used to protect or unprotect a hardened buffer
   * The `alkali::mem::MprotectReadable` trait has been added, which is implemented by `alkali::mem::FullAccess` and
     `alkali::mem::ReadOnly`, to indicate that a hardened buffer can be read from
+* The `serde::Deserialize` implementation for `alkali::curve::ristretto255::Point` now raises an error if the point is
+  not on the curve
 * **Breaking API changes**:
   * Every hardened buffer type now has an extra generic parameter `Mprotect`, which implements
     `alkali::mem::MprotectStatus`. The `new_empty` and `zero` methods are now only implemented for `Buffer<FullAccess>`.
