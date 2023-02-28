@@ -270,6 +270,7 @@ pub mod ed25519 {
     ///
     /// The private key is used to sign messages, and must be kept secret, while the public key is
     /// used to verify messages, and should be made public.
+    #[allow(clippy::unsafe_derive_deserialize)]
     #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
@@ -304,8 +305,8 @@ pub mod ed25519 {
                 // this function call. The `PrivateKey::inner_mut` method simply returns a mutable
                 // pointer to its backing memory.
                 sodium::crypto_sign_ed25519_keypair(
-                    &mut public_key as *mut libc::c_uchar,
-                    private_key.inner_mut() as *mut libc::c_uchar,
+                    core::ptr::addr_of_mut!(public_key).cast(),
+                    private_key.inner_mut().cast(),
                 )
             };
             assert_not_err!(keypair_result, "crypto_sign_ed25519_keypair");
@@ -346,9 +347,9 @@ pub mod ed25519 {
                 // for a seed for this algorithm. The `Seed::inner` method simply returns an
                 // immutable pointer to its backing memory.
                 sodium::crypto_sign_ed25519_seed_keypair(
-                    &mut public_key as *mut libc::c_uchar,
-                    private_key.inner_mut() as *mut libc::c_uchar,
-                    seed.inner() as *const libc::c_uchar,
+                    core::ptr::addr_of_mut!(public_key).cast(),
+                    private_key.inner_mut().cast(),
+                    seed.inner().cast(),
                 )
             };
             assert_not_err!(keypair_result, "crypto_sign_ed25519_seed_keypair");
@@ -390,8 +391,8 @@ pub mod ed25519 {
                 // algorithm, so it is valid for reads of the expected size. The `PrivateKey::inner`
                 // method simply returns an immutable pointer to its backing memory.
                 sodium::crypto_sign_ed25519_sk_to_pk(
-                    &mut public_key as *mut libc::c_uchar,
-                    private_key.inner() as *const libc::c_uchar,
+                    core::ptr::addr_of_mut!(public_key).cast(),
+                    private_key.inner().cast(),
                 )
             };
             assert_not_err!(sk_to_pk_result, "crypto_sign_ed25519_sk_to_pk");
@@ -424,8 +425,8 @@ pub mod ed25519 {
                 // The `PrivateKey::inner` method returns an immutable pointer to its backing
                 // memory.
                 sodium::crypto_sign_ed25519_sk_to_seed(
-                    seed.inner_mut() as *mut libc::c_uchar,
-                    self.private_key.inner() as *const libc::c_uchar,
+                    seed.inner_mut().cast(),
+                    self.private_key.inner().cast(),
                 )
             };
             assert_not_err!(sk_to_seed_result, "crypto_sign_ed25519_sk_to_seed");
@@ -594,7 +595,7 @@ pub mod ed25519 {
                     self.state.as_mut(),
                     signature.as_mut_ptr(),
                     ptr::null_mut(),
-                    keypair.private_key.inner() as *const libc::c_uchar,
+                    keypair.private_key.inner().cast(),
                 )
             };
             assert_not_err!(sign_result, "crypto_sign_ed25519ph_final_create");
@@ -712,11 +713,11 @@ pub mod ed25519 {
             // `keypair.private_key` without an over-read. The `PrivateKey::inner` method simply
             // returns an immutable pointer to its backing memory.
             sodium::crypto_sign_ed25519(
-                output.as_mut_ptr() as *mut libc::c_uchar,
+                output.as_mut_ptr().cast(),
                 ptr::null_mut(),
-                message.as_ptr() as *const libc::c_uchar,
+                message.as_ptr().cast(),
                 message.len() as libc::c_ulonglong,
-                keypair.private_key.inner() as *const libc::c_uchar,
+                keypair.private_key.inner().cast(),
             )
         };
         assert_not_err!(sign_result, "crypto_sign_ed25519");
@@ -750,11 +751,11 @@ pub mod ed25519 {
             // private key can be read from `keypair.private_key` without an over-read. The
             // `PrivateKey::inner` method simply returns an immutable pointer to its backing memory.
             sodium::crypto_sign_ed25519_detached(
-                &mut signature as *mut libc::c_uchar,
+                core::ptr::addr_of_mut!(signature).cast(),
                 ptr::null_mut(),
-                message.as_ptr() as *const libc::c_uchar,
+                message.as_ptr().cast(),
                 message.len() as libc::c_ulonglong,
-                keypair.private_key.inner() as *const libc::c_uchar,
+                keypair.private_key.inner().cast(),
             )
         };
         assert_not_err!(sign_result, "crypto_sign_ed25519_detached");
@@ -798,7 +799,7 @@ pub mod ed25519 {
             sodium::crypto_sign_ed25519_open(
                 ptr::null_mut(),
                 ptr::null_mut(),
-                signed_message.as_ptr() as *const libc::c_uchar,
+                signed_message.as_ptr().cast(),
                 signed_message.len() as libc::c_ulonglong,
                 public_key as *const libc::c_uchar,
             )
@@ -837,8 +838,8 @@ pub mod ed25519 {
             // this algorithm. Therefore, the public key can be read from `keypair.public_key`
             // without an over-read.
             sodium::crypto_sign_ed25519_verify_detached(
-                &signature.0 as *const libc::c_uchar,
-                message.as_ptr() as *const libc::c_uchar,
+                core::ptr::addr_of!(signature.0).cast(),
+                message.as_ptr().cast(),
                 message.len() as libc::c_ulonglong,
                 public_key as *const libc::c_uchar,
             )

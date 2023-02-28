@@ -180,7 +180,7 @@ macro_rules! auth_module {
                     // at the provided pointer. This is a valid representation of
                     // `[u8; KEY_LENGTH]`, so `key` is in a valid state following this function
                     // call.
-                    $keygen(key.inner_mut() as *mut libc::c_uchar);
+                    $keygen(key.inner_mut().cast());
                 }
                 Ok(key)
             }
@@ -250,11 +250,7 @@ macro_rules! auth_module {
                     // function is called, the memory pointed to by `state` is correctly
                     // initialised, and is a valid representation of a `crypto_auth_state` struct
                     // which can be used with other functions from Sodium.
-                    $mp_init(
-                        state.as_mut(),
-                        key.inner() as *const libc::c_uchar,
-                        KEY_LENGTH,
-                    )
+                    $mp_init(state.as_mut(), key.inner().cast(), KEY_LENGTH)
                 };
 
                 // This return value is not possible in the current implementation of
@@ -473,7 +469,7 @@ macro_rules! auth_module {
                     tag.as_mut_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(auth_result, stringify!($authenticate));
@@ -509,7 +505,7 @@ macro_rules! auth_module {
                     tag.0.as_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 

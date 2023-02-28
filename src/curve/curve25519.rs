@@ -61,6 +61,7 @@ impl Scalar<mem::FullAccess> {
 /// A point on Curve25519.
 ///
 /// For Curve25519, only the `x` coordinate is stored.
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Point(pub [u8; POINT_LENGTH]);
@@ -100,11 +101,7 @@ impl Point {
             // `crypto_scalarmult_curve25519_BYTES` bytes, the length of a compressed Curve25519
             // point representation, so `self.0` is valid for reads of the required length. The
             // `Scalar::inner` method simply returns a pointer to the backing memory of the struct.
-            sodium::crypto_scalarmult(
-                q.as_mut_ptr(),
-                n.inner() as *const libc::c_uchar,
-                self.0.as_ptr(),
-            )
+            sodium::crypto_scalarmult(q.as_mut_ptr(), n.inner().cast(), self.0.as_ptr())
         };
 
         if scalarmult_result == 0 {
@@ -157,7 +154,7 @@ pub fn scalar_mult_base(n: &Scalar<impl mem::MprotectReadable>) -> Result<Point,
         // allocate `crypto_scalarmult_curve25519_SCALARBYTES` bytes, the length of a scalar for
         // this algorithm, so `n` is valid for reads of the required length. The `Scalar::inner`
         // method simply returns a pointer to the backing memory of the struct.
-        sodium::crypto_scalarmult_curve25519_base(q.as_mut_ptr(), n.inner() as *const libc::c_uchar)
+        sodium::crypto_scalarmult_curve25519_base(q.as_mut_ptr(), n.inner().cast())
     };
     assert_not_err!(scalarmult_result, "crypto_scalarmult_curve25519_base");
 

@@ -299,14 +299,17 @@ macro_rules! hardened_buffer {
                         // allocated memory directly. The region of memory allocated will always be
                         // a valid representation of a `[u8; $size]`. See the drop implementation
                         // for more reasoning on safety.
-                        let ptr = $crate::mem::malloc()?;
+                        let ptr: core::ptr::NonNull<[u8; $size]> = $crate::mem::malloc()?;
 
                         // SAFETY: This function expects a pointer to a region of memory, and a
                         // number of bytes to clear starting at that pointer. We allocate `$size`
                         // bytes of memory at `ptr` in the line above, and specify `$size` bytes
                         // should be cleared, so the amount of memory to clear here is correct. All
                         // zeroes is a valid representation of a `u8` slice.
-                        $crate::libsodium_sys::sodium_memzero(ptr.as_ptr() as *mut $crate::libc::c_void, $size);
+                        $crate::libsodium_sys::sodium_memzero(
+                            ptr.as_ptr().cast::<$crate::libc::c_void>(),
+                            $size
+                        );
 
                         ptr
                     };
@@ -342,13 +345,17 @@ macro_rules! hardened_buffer {
             impl<Mprotect: $crate::mem::MprotectStatus> $crate::mem::Unprotect for $name<Mprotect> {
                 type Output = $name<$crate::mem::FullAccess>;
 
-                fn unprotect(mut self) -> Result<$name<$crate::mem::FullAccess>, $crate::AlkaliError> {
+                fn unprotect(
+                    mut self
+                ) -> Result<$name<$crate::mem::FullAccess>, $crate::AlkaliError> {
                     let mprotect_result = unsafe {
                         // SAFETY: This function expects a pointer to a region of memory previously
                         // allocated using `sodium_malloc`. The only way to construct an instance of
                         // this type is to allocate such a region of memory (via `new_empty`), so
                         // this pointer is guaranteed to be valid to use here.
-                        $crate::libsodium_sys::sodium_mprotect_readwrite(self.ptr.as_mut() as *mut u8 as *mut $crate::libc::c_void)
+                        $crate::libsodium_sys::sodium_mprotect_readwrite(
+                            (self.ptr.as_mut() as *mut u8).cast::<$crate::libc::c_void>()
+                        )
                     };
                     if mprotect_result < 0 {
                         return Err($crate::AlkaliError::MprotectFailed);
@@ -372,13 +379,17 @@ macro_rules! hardened_buffer {
             impl<Mprotect: $crate::mem::MprotectStatus> $crate::mem::ProtectReadOnly for $name<Mprotect> {
                 type Output = $name<$crate::mem::ReadOnly>;
 
-                fn protect_read_only(mut self) -> Result<$name<$crate::mem::ReadOnly>, $crate::AlkaliError> {
+                fn protect_read_only(
+                    mut self
+                ) -> Result<$name<$crate::mem::ReadOnly>, $crate::AlkaliError> {
                     let mprotect_result = unsafe {
                         // SAFETY: This function expects a pointer to a region of memory previously
                         // allocated using `sodium_malloc`. The only way to construct an instance of
                         // this type is to allocate such a region of memory (via `new_empty`), so
                         // this pointer is guaranteed to be valid to use here.
-                        $crate::libsodium_sys::sodium_mprotect_readonly(self.ptr.as_mut() as *mut u8 as *mut $crate::libc::c_void)
+                        $crate::libsodium_sys::sodium_mprotect_readonly(
+                            (self.ptr.as_mut() as *mut u8).cast::<$crate::libc::c_void>()
+                        )
                     };
                     if mprotect_result < 0 {
                         return Err($crate::AlkaliError::MprotectFailed);
@@ -402,13 +413,17 @@ macro_rules! hardened_buffer {
             impl<Mprotect: $crate::mem::MprotectStatus> $crate::mem::ProtectNoAccess for $name<Mprotect> {
                 type Output = $name<$crate::mem::NoAccess>;
 
-                fn protect_no_access(mut self) -> Result<$name<$crate::mem::NoAccess>, $crate::AlkaliError> {
+                fn protect_no_access(
+                    mut self
+                ) -> Result<$name<$crate::mem::NoAccess>, $crate::AlkaliError> {
                     let mprotect_result = unsafe {
                         // SAFETY: This function expects a pointer to a region of memory previously
                         // allocated using `sodium_malloc`. The only way to construct an instance of
                         // this type is to allocate such a region of memory (via `new_empty`), so
                         // this pointer is guaranteed to be valid to use here.
-                        $crate::libsodium_sys::sodium_mprotect_noaccess(self.ptr.as_mut() as *mut u8 as *mut $crate::libc::c_void)
+                        $crate::libsodium_sys::sodium_mprotect_noaccess(
+                            (self.ptr.as_mut() as *mut u8).cast::<$crate::libc::c_void>()
+                        )
                     };
                     if mprotect_result < 0 {
                         return Err($crate::AlkaliError::MprotectFailed);
@@ -453,18 +468,18 @@ macro_rules! hardened_buffer {
                 }
             }
 
-            /// # Safety
-            /// It is safe to transfer ownership between threads because we have exclusive access to
-            /// the inner pointer.
-            /// As long as we respect rust borrowing rules, there is no way the internal pointer can
-            /// be freed more than once.
+            // # Safety
+            // It is safe to transfer ownership between threads because we have exclusive access to
+            // the inner pointer.
+            // As long as we respect rust borrowing rules, there is no way the internal pointer can
+            // be freed more than once.
             unsafe impl<Mprotect: $crate::mem::MprotectStatus> core::marker::Send for $name<Mprotect> {}
 
-            /// # Safety
-            /// A read-only reference is safe to send across multiple threads because we have
-            /// exclusive access to the inner pointer.
-            /// As long as we respect rust borrowing rules, there is no way the internal pointer can
-            /// be freed more than once.
+            // # Safety
+            // A read-only reference is safe to send across multiple threads because we have
+            // exclusive access to the inner pointer.
+            // As long as we respect rust borrowing rules, there is no way the internal pointer can
+            // be freed more than once.
             unsafe impl<Mprotect: $crate::mem::MprotectStatus> core::marker::Sync for $name<Mprotect> {}
 
             impl<Mprotect: $crate::mem::MprotectStatus> Drop for $name<Mprotect> {
@@ -811,7 +826,7 @@ pub unsafe fn malloc_layout(layout: Layout) -> Result<NonNull<u8>, AlkaliError> 
     // size is a multiple of the alignment, we can guarantee that the allocated region will be
     // aligned correctly.
     let layout = layout.pad_to_align();
-    let ptr = sodium::sodium_malloc(layout.size()) as *mut u8;
+    let ptr = sodium::sodium_malloc(layout.size()).cast();
 
     NonNull::new(ptr).ok_or(AlkaliError::MemoryManagement)
 }
@@ -828,7 +843,7 @@ pub unsafe fn free<T>(ptr: NonNull<T>) {
     // This function should only ever be called after calling `malloc`, which invokes
     // `require_init`, so we don't need to initialise Sodium again here.
 
-    sodium::sodium_free(ptr.as_ptr() as *mut libc::c_void)
+    sodium::sodium_free(ptr.as_ptr().cast());
 }
 
 /// Constant time test for equality of two slices.
@@ -849,11 +864,7 @@ pub fn eq(a: &[u8], b: &[u8]) -> Result<bool, AlkaliError> {
         // specified by the third parameter. We check above to ensure that a and b are of the same
         // length. We use a.len() to specify the length, so it is correct for these slices. This
         // function will not modify the contents of either slice.
-        sodium::sodium_memcmp(
-            a.as_ptr() as *const libc::c_void,
-            b.as_ptr() as *const libc::c_void,
-            a.len(),
-        )
+        sodium::sodium_memcmp(a.as_ptr().cast(), b.as_ptr().cast(), a.len())
     };
 
     Ok(comparison_result == 0)
@@ -874,7 +885,7 @@ pub fn clear(buf: &mut [u8]) -> Result<(), AlkaliError> {
         // bytes should be cleared. Since `buf` is a slice of `u8`s, it points to `buf.len()`
         // bytes, so the amount of memory to clear here is correct. All zeroes is a valid
         // representation of a u8 slice.
-        sodium::sodium_memzero(buf.as_mut_ptr() as *mut libc::c_void, buf.len());
+        sodium::sodium_memzero(buf.as_mut_ptr().cast(), buf.len());
     };
 
     Ok(())

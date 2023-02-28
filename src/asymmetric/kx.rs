@@ -211,6 +211,7 @@ pub mod x25519blake2b {
     /// A ([`PrivateKey`], [`PublicKey`]) keypair, used for key exchange.
     ///
     /// The private key must be kept secret, while the public key can be made public.
+    #[allow(clippy::unsafe_derive_deserialize)]
     #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Keypair {
         /// The private key for this keypair.
@@ -242,10 +243,7 @@ pub mod x25519blake2b {
                 // valid representation of a `u8` array, so both variables will still be valid after
                 // this function call. The `PrivateKey::inner_mut` method simply returns a mutable
                 // pointer to its backing memory.
-                sodium::crypto_kx_keypair(
-                    public_key.as_mut_ptr(),
-                    private_key.inner_mut() as *mut libc::c_uchar,
-                )
+                sodium::crypto_kx_keypair(public_key.as_mut_ptr(), private_key.inner_mut().cast())
             };
             assert_not_err!(keypair_result, "crypto_kx_keypair");
 
@@ -282,8 +280,8 @@ pub mod x25519blake2b {
                 // `Seed::inner` method simply returns an immutable pointer to its backing memory.
                 sodium::crypto_kx_seed_keypair(
                     public_key.as_mut_ptr(),
-                    private_key.inner_mut() as *mut libc::c_uchar,
-                    seed.inner() as *const libc::c_uchar,
+                    private_key.inner_mut().cast(),
+                    seed.inner().cast(),
                 )
             };
             assert_not_err!(keypair_result, "crypto_kx_seed_keypair");
@@ -322,7 +320,7 @@ pub mod x25519blake2b {
                 // simply returns an immutable pointer to its backing memory.
                 sodium::crypto_scalarmult_curve25519_base(
                     public_key.as_mut_ptr(),
-                    private_key.inner() as *const libc::c_uchar,
+                    private_key.inner().cast(),
                 )
             };
             assert_not_err!(scalarmult_result, "crypto_scalarmult_curve25519_base");
@@ -373,10 +371,10 @@ pub mod x25519blake2b {
                 // of `crypto_kx_PUBLICKEYBYTES` in length. We once again use a `PublicKey` type
                 // here.
                 sodium::crypto_kx_client_session_keys(
-                    rx.inner_mut() as *mut libc::c_uchar,
-                    tx.inner_mut() as *mut libc::c_uchar,
+                    rx.inner_mut().cast(),
+                    tx.inner_mut().cast(),
                     self.public_key.as_ptr(),
-                    self.private_key.inner() as *const libc::c_uchar,
+                    self.private_key.inner().cast(),
                     server_pub.as_ptr(),
                 )
             };
@@ -428,10 +426,10 @@ pub mod x25519blake2b {
                 // of `crypto_kx_PUBLICKEYBYTES` in length. We once again use a `PublicKey` type
                 // here.
                 sodium::crypto_kx_server_session_keys(
-                    rx.inner_mut() as *mut libc::c_uchar,
-                    tx.inner_mut() as *mut libc::c_uchar,
+                    rx.inner_mut().cast(),
+                    tx.inner_mut().cast(),
                     self.public_key.as_ptr(),
-                    self.private_key.inner() as *const libc::c_uchar,
+                    self.private_key.inner().cast(),
                     client_pub.as_ptr(),
                 )
             };

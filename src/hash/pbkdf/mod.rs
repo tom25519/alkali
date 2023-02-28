@@ -415,8 +415,8 @@ macro_rules! pbkdf_module_common {
                 // integers. We verify above that they fall within the acceptable range for use
                 // here.
                 $pwhash_str(
-                    out.as_mut_ptr() as *mut libc::c_char,
-                    password.as_bytes().as_ptr() as *const libc::c_char,
+                    out.as_mut_ptr().cast(),
+                    password.as_bytes().as_ptr().cast(),
                     password.as_bytes().len() as libc::c_ulonglong,
                     ops_limit as libc::c_ulonglong,
                     mem_limit,
@@ -437,7 +437,7 @@ macro_rules! pbkdf_module_common {
                     // the length of the string, including the null byte. We use `out.len()` to
                     // specify the maximum number of bytes which can be read from `out`, as a sanity
                     // check.
-                    libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
+                    libc::strnlen(out.as_ptr().cast(), out.len())
                 };
                 let output_string = std::ffi::CString::new(&out[..hash_len])
                     .unwrap()
@@ -479,8 +479,8 @@ macro_rules! pbkdf_module_common {
                 // `*const c_char` pointers, which is safe, as the two types have the same
                 // representation.
                 $pwhash_verify(
-                    hash.as_bytes_with_nul().as_ptr() as *const libc::c_char,
-                    password.as_bytes().as_ptr() as *const libc::c_char,
+                    hash.as_bytes_with_nul().as_ptr().cast(),
+                    password.as_bytes().as_ptr().cast(),
                     password.as_bytes().len() as libc::c_ulonglong,
                 )
             };
@@ -530,7 +530,7 @@ macro_rules! pbkdf_module_common {
                 // have the same representation. The next two arguments specify the operations and
                 // memory limits, which are just integers.
                 $str_needs_rehash(
-                    hash.as_bytes_with_nul().as_ptr() as *const libc::c_char,
+                    hash.as_bytes_with_nul().as_ptr().cast(),
                     ops_limit as libc::c_ulonglong,
                     mem_limit,
                 )
@@ -688,7 +688,7 @@ macro_rules! argon_module {
                 $pwhash(
                     key.as_mut_ptr(),
                     key.len() as libc::c_ulonglong,
-                    password.as_ptr() as *const libc::c_char,
+                    password.as_ptr().cast(),
                     password.len() as libc::c_ulonglong,
                     salt.as_ptr(),
                     ops_limit as libc::c_ulonglong,
@@ -834,7 +834,7 @@ macro_rules! scrypt_module {
                 $pwhash(
                     key.as_mut_ptr(),
                     key.len() as libc::c_ulonglong,
-                    password.as_ptr() as *const libc::c_char,
+                    password.as_ptr().cast(),
                     password.len() as libc::c_ulonglong,
                     salt.as_ptr(),
                     ops_limit as libc::c_ulonglong,

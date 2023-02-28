@@ -259,6 +259,7 @@ macro_rules! sha2_module {
             /// `digest` is the hash against which the message will be compared.
             ///
             /// This comparison runs in constant time.
+            #[must_use]
             pub fn compare(mut self, digest: &Digest) -> bool {
                 let actual_digest = self.finalise();
                 mem::eq(&digest.0, &actual_digest.0).unwrap()

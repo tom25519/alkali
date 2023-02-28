@@ -106,7 +106,7 @@ impl Key<mem::FullAccess> {
             // key for this algorithm. It is therefore valid for writes of the required length. The
             // `Key::inner_mut` method simply returns a mutable pointer to the struct's backing
             // memory.
-            sodium::crypto_aead_aes256gcm_keygen(key.inner_mut() as *mut libc::c_uchar);
+            sodium::crypto_aead_aes256gcm_keygen(key.inner_mut().cast());
         }
         Ok(key)
     }
@@ -435,7 +435,7 @@ pub fn encrypt_detached(
             ad_len as libc::c_ulonglong,
             ptr::null(),
             nonce.as_ptr(),
-            key.inner() as *const libc::c_uchar,
+            key.inner().cast(),
         )
     };
     assert_not_err!(encrypt_result, "crypto_aead_aes256gcm_encrypt_detached");
@@ -520,7 +520,7 @@ pub fn decrypt_detached(
             ad_ptr,
             ad_len as libc::c_ulonglong,
             nonce.as_ptr(),
-            key.inner() as *const libc::c_uchar,
+            key.inner().cast(),
         )
     };
 

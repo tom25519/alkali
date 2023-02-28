@@ -123,7 +123,7 @@ pub mod blake2b {
                 // for this algorithm. It is therefore valid for writes of the required length. The
                 // `Key::inner_mut` method simply returns a mutable pointer to the struct's backing
                 // memory.
-                sodium::crypto_kdf_keygen(key.inner_mut() as *mut libc::c_uchar);
+                sodium::crypto_kdf_keygen(key.inner_mut().cast());
             }
             Ok(key)
         }
@@ -179,8 +179,8 @@ pub mod blake2b {
                 subkey.as_mut_ptr(),
                 subkey.len(),
                 subkey_id,
-                context.as_bytes().as_ptr() as *const libc::c_char,
-                key.inner() as *const libc::c_uchar,
+                context.as_bytes().as_ptr().cast(),
+                key.inner().cast(),
             )
         };
 

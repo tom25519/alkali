@@ -116,6 +116,13 @@
 #![cfg_attr(doc_cfg, feature(doc_cfg))]
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
 #![cfg_attr(feature = "alloc", feature(nonnull_slice_from_raw_parts))]
+#![deny(clippy::all)]
+#![deny(clippy::pedantic)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
 
 // Hidden re-exports used in macros
 #[doc(hidden)]

@@ -142,6 +142,7 @@ pub mod xchacha20poly1305 {
 
     /// Types of message which can be sent as part of a stream.
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[allow(clippy::cast_possible_truncation)]
     #[repr(u8)]
     pub enum MessageType {
         /// Indicates a standard message, doesn't add any information about its nature.
@@ -224,9 +225,7 @@ pub mod xchacha20poly1305 {
                 // for writes of this length. The `Key` type allocates this many bytes, so it is
                 // valid for writes of the required size. The `Key::inner_mut` method simply returns
                 // a mutable pointer to its backing memory.
-                sodium::crypto_secretstream_xchacha20poly1305_keygen(
-                    key.inner_mut() as *mut libc::c_uchar
-                );
+                sodium::crypto_secretstream_xchacha20poly1305_keygen(key.inner_mut().cast());
             }
             Ok(key)
         }
@@ -290,7 +289,7 @@ pub mod xchacha20poly1305 {
                 sodium::crypto_secretstream_xchacha20poly1305_init_push(
                     state.as_mut(),
                     header.as_mut_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 
@@ -649,7 +648,7 @@ pub mod xchacha20poly1305 {
                 sodium::crypto_secretstream_xchacha20poly1305_init_pull(
                     state.as_mut(),
                     header.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 
@@ -667,6 +666,7 @@ pub mod xchacha20poly1305 {
         /// Is the stream finalised?
         ///
         /// After the stream has been finalised, no more messages can be received.
+        #[must_use]
         pub fn is_finalised(&self) -> bool {
             self.finalised
         }
@@ -693,6 +693,7 @@ pub mod xchacha20poly1305 {
         /// Messages should be decrypted in the order they were encrypted. The order in which
         /// messages are encrypted matters, and attempting to decrypt messages out of order will
         /// fail.
+        #[allow(clippy::cast_lossless)]
         pub fn decrypt(
             &mut self,
             ciphertext: &[u8],

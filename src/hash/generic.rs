@@ -226,7 +226,7 @@ pub mod blake2b {
                 // key size for this algorithm, so it is valid for writes of the required length.
                 // The `Key::inner_mut` method simply returns a mutable pointer to its backing
                 // memory.
-                sodium::crypto_generichash_blake2b_keygen(key.inner_mut() as *mut libc::c_uchar);
+                sodium::crypto_generichash_blake2b_keygen(key.inner_mut().cast());
             }
             Ok(key)
         }

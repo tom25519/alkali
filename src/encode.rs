@@ -26,6 +26,7 @@ pub mod hex {
     /// using [`decode`].
     ///
     /// This encoding runs in constant-time for a given length of `buf`.
+    #[allow(clippy::missing_panics_doc)]
     pub fn encode(buf: &[u8]) -> Result<String, AlkaliError> {
         require_init()?;
 
@@ -42,12 +43,7 @@ pub mod hex {
             // writes of this length. The next two arguments specify the buffer to encode, and its
             // length. We use `buf.len()` to specify the number of bytes to encode, so `buf` is
             // definitely valid for reads of this length.
-            sodium::sodium_bin2hex(
-                out.as_mut_ptr() as *mut libc::c_char,
-                out.len(),
-                buf.as_ptr(),
-                buf.len(),
-            );
+            sodium::sodium_bin2hex(out.as_mut_ptr().cast(), out.len(), buf.as_ptr(), buf.len());
 
             // SAFETY: This is a binding to the strnlen function from the C standard library. This
             // function takes a pointer to a C-formatted string (with null byte) as an argument,
@@ -57,9 +53,10 @@ pub mod hex {
             // is safe to use strnlen to determine the length of the string, including the null
             // byte. We set the maximum number of bytes to read from `out` to be `out.len()`, so
             // `out` is clearly valid for reads of this length.
-            libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
+            libc::strnlen(out.as_ptr().cast(), out.len())
         };
 
+        // It is okay to unwrap here, as Sodium guarantees the output will be a valid C string.
         let output_string = CString::new(&out[..hex_len])
             .unwrap()
             .into_string()
@@ -106,7 +103,7 @@ pub mod hex {
         let decode_result = sodium::sodium_hex2bin(
             output.as_mut_ptr(),
             output.len(),
-            hex.as_bytes().as_ptr() as *const libc::c_char,
+            hex.as_bytes().as_ptr().cast(),
             hex.as_bytes().len(),
             ignore,
             &mut written,
@@ -169,11 +166,7 @@ pub mod hex {
             // string, then calling `as_bytes_with_nul`. The definition of CString in the Rust
             // standard library says that this will produce a byte slice ending in a null byte,
             // equivalent to the C-style representation of the string.
-            decode_impl(
-                hex,
-                ignore.as_bytes_with_nul().as_ptr() as *const libc::c_char,
-                output,
-            )
+            decode_impl(hex, ignore.as_bytes_with_nul().as_ptr().cast(), output)
         };
 
         written
@@ -277,6 +270,7 @@ pub mod base64 {
     ///
     /// Returns the Base64-encoded contents of `buf`. This can later be decoded back to raw bytes
     /// using [`decode`].
+    #[allow(clippy::missing_panics_doc)]
     pub fn encode(buf: &[u8], variant: Variant) -> Result<String, AlkaliError> {
         require_init()?;
 
@@ -305,7 +299,7 @@ pub mod base64 {
             // `Variant` enum so that each item is represented by Sodium's integer value for each
             // variant, so `variant`'s integer representation is valid here.
             sodium::sodium_bin2base64(
-                out.as_mut_ptr() as *mut libc::c_char,
+                out.as_mut_ptr().cast(),
                 out.len(),
                 buf.as_ptr(),
                 buf.len(),
@@ -320,9 +314,11 @@ pub mod base64 {
             // Therefore, it is safe to use strnlen to determine the length of the string,
             // including the null byte. We set the maximum number of bytes to read from `out` to be
             // `out.len()`, so `out` is clearly valid for reads of this length.
-            libc::strnlen(out.as_ptr() as *const libc::c_char, out.len())
+            libc::strnlen(out.as_ptr().cast(), out.len())
         };
 
+        // It is okay to unwrap here, because Sodium guarantees that the output will be a valid
+        // C string.
         let output_string = CString::new(&out[..base64_len])
             .unwrap()
             .into_string()
@@ -373,7 +369,7 @@ pub mod base64 {
         let decode_result = sodium::sodium_base642bin(
             output.as_mut_ptr(),
             output.len(),
-            base64.as_bytes().as_ptr() as *const libc::c_char,
+            base64.as_bytes().as_ptr().cast(),
             base64.as_bytes().len(),
             ignore,
             &mut written,
@@ -440,7 +436,7 @@ pub mod base64 {
             // equivalent to the C-style representation of the string.
             decode_impl(
                 base64,
-                ignore.as_bytes_with_nul().as_ptr() as *const libc::c_char,
+                ignore.as_bytes_with_nul().as_ptr().cast(),
                 variant,
                 output,
             )

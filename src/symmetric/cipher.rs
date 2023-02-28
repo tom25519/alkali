@@ -211,7 +211,7 @@ macro_rules! cipher_module {
                     // of a key for this algorithm. It is therefore valid for writes of the required
                     // length. The `Key::inner_mut` method simply returns a mutable pointer to the
                     // struct's backing memory.
-                    $keygen(key.inner_mut() as *mut libc::c_uchar);
+                    $keygen(key.inner_mut().cast());
                 }
                 Ok(key)
             }
@@ -313,7 +313,7 @@ macro_rules! cipher_module {
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(encrypt_result, stringify!($encrypt));
@@ -375,7 +375,7 @@ macro_rules! cipher_module {
                     ciphertext.as_ptr(),
                     ciphertext.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 
@@ -462,7 +462,7 @@ macro_rules! cipher_module {
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(encrypt_result, stringify!($encrypt_d));
@@ -524,7 +524,7 @@ macro_rules! cipher_module {
                     mac.as_ptr(),
                     ciphertext.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 

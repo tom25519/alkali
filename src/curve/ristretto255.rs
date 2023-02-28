@@ -75,7 +75,7 @@ impl Scalar<mem::FullAccess> {
             // algorithm, so `scalar` is valid for writes of the required length. The
             // `Scalar::inner_mut` method simply returns a mutable pointer to the struct's backing
             // memory.
-            sodium::crypto_core_ristretto255_scalar_random(scalar.inner_mut() as *mut libc::c_uchar);
+            sodium::crypto_core_ristretto255_scalar_random(scalar.inner_mut().cast());
         }
 
         Ok(scalar)
@@ -102,8 +102,8 @@ impl Scalar<mem::FullAccess> {
             // `UnreducedScalar` type to allocate this many bytes, so `unreduced` is valid for reads
             // of the required length.
             sodium::crypto_core_ristretto255_scalar_reduce(
-                scalar.inner_mut() as *mut libc::c_uchar,
-                unreduced.inner() as *const libc::c_uchar,
+                scalar.inner_mut().cast(),
+                unreduced.inner().cast(),
             );
         }
 
@@ -135,10 +135,7 @@ impl Scalar<mem::FullAccess> {
             // is the scalar to invert. We define the `buf` array to be of length
             // `crypto_core_ristretto255_SCALARBYTES`, so it is valid for reads of the required
             // length.
-            sodium::crypto_core_ristretto255_scalar_invert(
-                self.inner_mut() as *mut libc::c_uchar,
-                buf.as_ptr(),
-            )
+            sodium::crypto_core_ristretto255_scalar_invert(self.inner_mut().cast(), buf.as_ptr())
         };
         mem::clear(&mut buf)?;
         assert_not_err!(invert_result, "crypto_core_ristretto255_scalar_invert");
@@ -165,10 +162,7 @@ impl Scalar<mem::FullAccess> {
             // is the scalar to negate. We define the `buf` array to be of length
             // `crypto_core_ristretto255_SCALARBYTES`, so it is valid for reads of the required
             // length.
-            sodium::crypto_core_ristretto255_scalar_negate(
-                self.inner_mut() as *mut libc::c_uchar,
-                buf.as_ptr(),
-            );
+            sodium::crypto_core_ristretto255_scalar_negate(self.inner_mut().cast(), buf.as_ptr());
         }
         mem::clear(&mut buf)?;
 
@@ -194,7 +188,7 @@ impl Scalar<mem::FullAccess> {
             // `crypto_core_ristretto255_SCALARBYTES`, so it is valid for reads of the required
             // length.
             sodium::crypto_core_ristretto255_scalar_complement(
-                self.inner_mut() as *mut libc::c_uchar,
+                self.inner_mut().cast(),
                 buf.as_ptr(),
             );
         }
@@ -221,9 +215,9 @@ impl Scalar<mem::FullAccess> {
             // store `crypto_core_ristretto255_SCALARBYTES`, so `s` and `buf` are valid for reads of
             // the required length.
             sodium::crypto_core_ristretto255_scalar_add(
-                self.inner_mut() as *mut libc::c_uchar,
+                self.inner_mut().cast(),
                 buf.as_ptr(),
-                s.inner() as *const libc::c_uchar,
+                s.inner().cast(),
             );
         }
         mem::clear(&mut buf)?;
@@ -249,9 +243,9 @@ impl Scalar<mem::FullAccess> {
             // `Scalar` type to store `crypto_core_ristretto255_SCALARBYTES`, so `s` and `buf` are
             // valid for reads of the required length.
             sodium::crypto_core_ristretto255_scalar_sub(
-                self.inner_mut() as *mut libc::c_uchar,
+                self.inner_mut().cast(),
                 buf.as_ptr(),
-                s.inner() as *const libc::c_uchar,
+                s.inner().cast(),
             );
         }
         mem::clear(&mut buf)?;
@@ -277,9 +271,9 @@ impl Scalar<mem::FullAccess> {
             // to store `crypto_core_ristretto255_SCALARBYTES`, so `s` and `buf` are valid for reads
             // of the required length.
             sodium::crypto_core_ristretto255_scalar_mul(
-                self.inner_mut() as *mut libc::c_uchar,
+                self.inner_mut().cast(),
                 buf.as_ptr(),
-                s.inner() as *const libc::c_uchar,
+                s.inner().cast(),
             );
         }
         mem::clear(&mut buf)?;
@@ -301,6 +295,7 @@ pub struct Hash(
 /// A point on Ristretto255.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::unsafe_derive_deserialize)]
 pub struct Point(pub [u8; POINT_LENGTH]);
 
 impl Point {
@@ -398,7 +393,7 @@ impl Point {
             // the backing memory of the struct.
             sodium::crypto_scalarmult_ristretto255(
                 q.as_mut_ptr(),
-                n.inner() as *const libc::c_uchar,
+                n.inner().cast(),
                 self.0.as_ptr(),
             )
         };
@@ -516,10 +511,7 @@ pub fn scalar_mult_base(n: &Scalar<impl mem::MprotectReadable>) -> Result<Point,
         // type is defined to allocate `crypto_scalarmult_ristretto255_SCALARBYTES` bytes, the
         // length of a scalar for this algorithm, so `n` is valid for reads of the required length.
         // The `Scalar::inner` method simply returns a pointer to the backing memory of the struct.
-        sodium::crypto_scalarmult_ristretto255_base(
-            q.as_mut_ptr(),
-            n.inner() as *const libc::c_uchar,
-        )
+        sodium::crypto_scalarmult_ristretto255_base(q.as_mut_ptr(), n.inner().cast())
     };
 
     if scalarmult_result == 0 {

@@ -125,7 +125,7 @@ macro_rules! short_module {
                     digest.as_mut_ptr(),
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(hash_result, stringify!($shorthash));

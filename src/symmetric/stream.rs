@@ -137,7 +137,7 @@ macro_rules! stream_module {
                     // for this algorithm. It is therefore valid for writes of the required length.
                     // The `Key::inner_mut` method simply returns a mutable pointer to the struct's
                     // backing memory.
-                    $keygen(key.inner_mut() as *mut libc::c_uchar);
+                    $keygen(key.inner_mut().cast());
                 }
                 Ok(key)
             }
@@ -183,7 +183,7 @@ macro_rules! stream_module {
                     output.as_mut_ptr(),
                     output.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(stream_result, stringify!($stream));
@@ -247,7 +247,7 @@ macro_rules! stream_module {
                     message.as_ptr(),
                     message.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(encrypt_result, stringify!($xor));
@@ -363,7 +363,7 @@ macro_rules! stream_module {
                     message.len() as libc::c_ulonglong,
                     nonce.as_ptr(),
                     ic,
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(encrypt_result, stringify!($xor));
@@ -468,7 +468,7 @@ macro_rules! expansion_function {
                 $expand(
                     output.as_mut_ptr(),
                     n.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                     const_ptr,
                 )
             };
@@ -717,7 +717,7 @@ pub mod xsalsa20 {
             sodium::crypto_core_hsalsa20(
                 output.as_mut_ptr(),
                 nonce.as_ptr(),
-                key.inner() as *const libc::c_uchar,
+                key.inner().cast(),
                 const_ptr,
             )
         };
@@ -1505,7 +1505,7 @@ pub mod xchacha20 {
             sodium::crypto_core_hchacha20(
                 output.as_mut_ptr(),
                 nonce.as_ptr(),
-                key.inner() as *const libc::c_uchar,
+                key.inner().cast(),
                 const_ptr,
             )
         };

@@ -167,7 +167,7 @@ macro_rules! chacha_aead_module {
                     // key for this algorithm. It is therefore valid for writes of the required
                     // length. The `Key::inner_mut` method simply returns a mutable pointer to the
                     // struct's backing memory.
-                    $keygen(key.inner_mut() as *mut libc::c_uchar);
+                    $keygen(key.inner_mut().cast());
                 }
                 Ok(key)
             }
@@ -282,7 +282,7 @@ macro_rules! chacha_aead_module {
                     ad_len as libc::c_ulonglong,
                     ptr::null(),
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(encrypt_result, stringify!($encrypt));
@@ -375,7 +375,7 @@ macro_rules! chacha_aead_module {
                     ad_ptr,
                     ad_len as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 
@@ -481,7 +481,7 @@ macro_rules! chacha_aead_module {
                     ad_len as libc::c_ulonglong,
                     ptr::null(),
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
             assert_not_err!(encrypt_result, stringify!($encrypt_d));
@@ -570,7 +570,7 @@ macro_rules! chacha_aead_module {
                     ad_ptr,
                     ad_len as libc::c_ulonglong,
                     nonce.as_ptr(),
-                    key.inner() as *const libc::c_uchar,
+                    key.inner().cast(),
                 )
             };
 

@@ -216,7 +216,7 @@ macro_rules! seal_module {
                     // pointer to the backing memory.
                     libsodium_sys::crypto_scalarmult_base(
                         public_key.as_mut_ptr(),
-                        self.inner() as *const libc::c_uchar,
+                        self.inner().cast(),
                     );
                 }
 
@@ -240,6 +240,7 @@ macro_rules! seal_module {
         /// and there is no security risk in converting between the two.
         ///
         /// The private key must be kept secret, while the public key can be made public.
+        #[allow(clippy::unsafe_derive_deserialize)]
         #[cfg_attr(feature = "use-serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct Keypair {
             /// The private key for this keypair.
@@ -271,10 +272,7 @@ macro_rules! seal_module {
                     // of memory can be a valid representation of a `u8` array, so both variables
                     // will still be valid after this function call. The `PrivateKey::inner_mut`
                     // method simply returns a mutable pointer to its backing memory.
-                    $keypair(
-                        public_key.as_mut_ptr(),
-                        private_key.inner_mut() as *mut libc::c_uchar,
-                    )
+                    $keypair(public_key.as_mut_ptr(), private_key.inner_mut().cast())
                 };
                 assert_not_err!(keypair_result, stringify!($keypair));
 
@@ -312,8 +310,8 @@ macro_rules! seal_module {
                     // its backing memory.
                     $seed_keypair(
                         public_key.as_mut_ptr(),
-                        private_key.inner_mut() as *mut libc::c_uchar,
-                        seed.inner() as *const libc::c_uchar,
+                        private_key.inner_mut().cast(),
+                        seed.inner().cast(),
                     )
                 };
                 assert_not_err!(keypair_result, stringify!($seed_keypair));
@@ -351,10 +349,7 @@ macro_rules! seal_module {
                     // multiplication, so it is valid for reads of the expected size. The
                     // `PrivateKey::inner` method simply returns an immutable pointer to its backing
                     // memory.
-                    $scalarmult_base(
-                        public_key.as_mut_ptr(),
-                        private_key.inner() as *const libc::c_uchar,
-                    )
+                    $scalarmult_base(public_key.as_mut_ptr(), private_key.inner().cast())
                 };
                 assert_not_err!(scalarmult_result, stringify!($scalarmult_base));
 
@@ -471,7 +466,7 @@ macro_rules! seal_module {
                     ciphertext.as_ptr(),
                     ciphertext.len() as libc::c_ulonglong,
                     keypair.public_key.as_ptr(),
-                    keypair.private_key.inner() as *const libc::c_uchar,
+                    keypair.private_key.inner().cast(),
                 )
             };
 

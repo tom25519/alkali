@@ -164,7 +164,7 @@ pub fn fill_random(buf: &mut [u8]) -> Result<(), AlkaliError> {
         // be written, and the second argument should be the number of bytes to write, starting at
         // the pointer. We use `buf.len()` to specify the number of bytes to write, so `buf` is
         // clearly valid for writes of the required length.
-        sodium::randombytes_buf(buf.as_mut_ptr() as *mut libc::c_void, buf.len());
+        sodium::randombytes_buf(buf.as_mut_ptr().cast(), buf.len());
     }
 
     Ok(())
@@ -191,7 +191,7 @@ pub fn fill_random_from_seed(
     // constraint doesn't apply if we use `randombytes_buf` (unseeded PRNG) since Sodium
     // automatically reseeds the PRNG when required.
     #[cfg(target_pointer_width = "64")]
-    if buf.len() > 0x4000000000 {
+    if buf.len() > 0x40_0000_0000 {
         return Err(RandomError::SeedExhausted.into());
     }
 
@@ -205,9 +205,9 @@ pub fn fill_random_from_seed(
         // so `seed` is valid for reads of the required length. The `Seed::inner` method simply
         // returns an immutable pointer to its backing memory.
         sodium::randombytes_buf_deterministic(
-            buf.as_mut_ptr() as *mut libc::c_void,
+            buf.as_mut_ptr().cast(),
             buf.len(),
-            seed.inner() as *const libc::c_uchar,
+            seed.inner().cast(),
         );
     }
 

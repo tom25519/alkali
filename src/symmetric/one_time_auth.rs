@@ -180,7 +180,7 @@ pub mod poly1305 {
                 // `[u8; KEY_LENGTH]`, so `key` is in a valid state following this function call.
                 // The `Key::inner_mut` method simply returns a mutable pointer to its backing
                 // memory.
-                sodium::crypto_onetimeauth_poly1305_keygen(key.inner_mut() as *mut libc::c_uchar);
+                sodium::crypto_onetimeauth_poly1305_keygen(key.inner_mut().cast());
             }
             Ok(key)
         }
@@ -249,10 +249,7 @@ pub mod poly1305 {
                 // by `state` is correctly initialised, and is a valid representation of a
                 // `crypto_onetimeauth_state` struct which can be used with other functions from
                 // Sodium.
-                sodium::crypto_onetimeauth_poly1305_init(
-                    state.as_mut(),
-                    key.inner() as *const libc::c_uchar,
-                )
+                sodium::crypto_onetimeauth_poly1305_init(state.as_mut(), key.inner().cast())
             };
 
             // This return value is not possible in the current implementation of
@@ -485,7 +482,7 @@ pub mod poly1305 {
                 tag.as_mut_ptr(),
                 message.as_ptr(),
                 message.len() as libc::c_ulonglong,
-                key.inner() as *const libc::c_uchar,
+                key.inner().cast(),
             )
         };
         assert_not_err!(auth_result, "crypto_onetimeauth_poly1305");
@@ -518,7 +515,7 @@ pub mod poly1305 {
                 tag.as_ptr(),
                 message.as_ptr(),
                 message.len() as libc::c_ulonglong,
-                key.inner() as *const libc::c_uchar,
+                key.inner().cast(),
             )
         };
 
