@@ -87,6 +87,19 @@ jobs:
       - run: cargo test --features "aes hazmat minimal"
       - run: cargo test --release --features "aes hazmat minimal optimized"
 
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo clippy --features "aes alloc hazmat"
+      - run: cargo fmt -- --check
+
   docs:
     runs-on: ubuntu-latest
     steps:
