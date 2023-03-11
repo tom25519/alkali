@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2023-03-11)
 * Typed support for protecting hardened buffers via the `sodium_mprotect` API
   * The `alkali::mem` module now includes a number of marker types and traits to indicate the protection status of a
     hardened buffer
