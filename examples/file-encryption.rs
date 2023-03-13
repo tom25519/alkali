@@ -24,8 +24,9 @@
 //! ```
 
 use alkali::hash::pbkdf;
-use alkali::mem;
+use alkali::mem::{self, ProtectReadOnly};
 use alkali::symmetric::cipher_stream;
+use anyhow::Result;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -37,8 +38,8 @@ const CHUNK_SIZE: usize = 4096;
 fn derive_key_from_password(
     password: &[u8],
     salt: &pbkdf::Salt,
-) -> cipher_stream::Key<mem::FullAccess> {
-    let mut key = cipher_stream::Key::new_empty().unwrap();
+) -> Result<cipher_stream::Key<mem::ReadOnly>> {
+    let mut key = cipher_stream::Key::new_empty()?;
 
     println!("Deriving key...");
     pbkdf::derive_key(
@@ -47,33 +48,37 @@ fn derive_key_from_password(
         pbkdf::OPS_LIMIT_SENSITIVE,
         pbkdf::MEM_LIMIT_SENSITIVE,
         &mut key[..],
-    )
-    .unwrap();
+    )?;
 
-    key
+    // We protect the key using libsodium's `sodium_mprotect` API via the `ProtectReadOnly` trait.
+    Ok(key.protect_read_only()?)
 }
 
 /// Encrypts `source`, writing the result to `dest`, using `password` to derive the encryption key.
-fn encrypt_file<S, D>(source: &S, dest: &D, password: &[u8])
+fn encrypt_file<S, D>(source: &S, dest: &D, password: &[u8]) -> Result<()>
 where
     S: AsRef<Path>,
     D: AsRef<Path>,
 {
-    let mut source = File::open(source).unwrap();
-    let mut dest = File::options().write(true).create(true).open(dest).unwrap();
+    let mut source = File::open(source)?;
+    let mut dest = File::options().write(true).create(true).open(dest)?;
 
     // Derive an encryption key with a random salt
-    let salt = pbkdf::generate_salt().unwrap();
-    let key = derive_key_from_password(&password, &salt);
+    let salt = pbkdf::generate_salt()?;
+    let key = derive_key_from_password(&password, &salt)?;
 
     // Prefix the output with the salt, so it can be used to derive the same key when decrypting
-    dest.write_all(&salt).unwrap();
+    dest.write_all(&salt)?;
 
-    let mut stream = cipher_stream::EncryptionStream::new(&key).unwrap();
+    let mut stream = cipher_stream::EncryptionStream::new(&key)?;
+
+    // The key is no longer required, drop it ASAP to clear it from memory (the key is allocated
+    // using Sodium's secure allocator, and on drop, will be zeroed before free).
+    drop(key);
 
     // Write the stream header to the file
     let header = stream.get_header();
-    dest.write_all(&header).unwrap();
+    dest.write_all(&header)?;
 
     // Read the file in chunks, and encrypt
     let mut buf_read = [0; CHUNK_SIZE];
@@ -82,49 +87,53 @@ where
         let mut read = 0;
 
         while read < CHUNK_SIZE {
-            let current_read = source.read(&mut buf_read[read..]).unwrap();
+            let current_read = source.read(&mut buf_read[read..])?;
 
             // Detect end of file, write final chunk
             if current_read == 0 {
-                let to_write = stream
-                    .finalise(&buf_read[..read], None, &mut buf_write)
-                    .unwrap();
-                dest.write_all(&buf_write[..to_write]).unwrap();
+                let to_write = stream.finalise(&buf_read[..read], None, &mut buf_write)?;
+                dest.write_all(&buf_write[..to_write])?;
                 break 'outer;
             }
 
             read += current_read;
         }
 
-        stream.encrypt(&buf_read, None, &mut buf_write).unwrap();
-        dest.write_all(&buf_write).unwrap();
+        stream.encrypt(&buf_read, None, &mut buf_write)?;
+        dest.write_all(&buf_write)?;
     }
 
     // Clear the input buffer, which still contains plaintext
-    alkali::mem::clear(&mut buf_read).unwrap();
+    mem::clear(&mut buf_read)?;
+
+    Ok(())
 }
 
 /// Decrypts `source`, writing the result to `dest`, using `password` to derive the decryption key.
-fn decrypt_file<S, D>(source: &S, dest: &D, password: &[u8])
+fn decrypt_file<S, D>(source: &S, dest: &D, password: &[u8]) -> Result<()>
 where
     S: AsRef<Path>,
     D: AsRef<Path>,
 {
-    let mut source = File::open(source).unwrap();
-    let mut dest = File::options().write(true).create(true).open(dest).unwrap();
+    let mut source = File::open(source)?;
+    let mut dest = File::options().write(true).create(true).open(dest)?;
 
     // Read the salt from the input
     let mut salt = [0; pbkdf::SALT_LENGTH];
-    source.read_exact(&mut salt).unwrap();
+    source.read_exact(&mut salt)?;
 
     // Derive the decryption key from the password using the salt
-    let key = derive_key_from_password(&password, &salt);
+    let key = derive_key_from_password(&password, &salt)?;
 
     // Read the header from the input
     let mut header = [0; cipher_stream::HEADER_LENGTH];
-    source.read_exact(&mut header).unwrap();
+    source.read_exact(&mut header)?;
 
-    let mut stream = cipher_stream::DecryptionStream::new(&key, &header).unwrap();
+    let mut stream = cipher_stream::DecryptionStream::new(&key, &header)?;
+
+    // The key is no longer required, drop it ASAP to clear it from memory (the key is allocated
+    // using Sodium's secure allocator, and on drop, will be zeroed before free).
+    drop(key);
 
     // Read the file in chunks, and decrypt
     let mut buf_read = [0; CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH];
@@ -133,31 +142,31 @@ where
         let mut read = 0;
 
         while read < CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH {
-            let current_read = source.read(&mut buf_read[read..]).unwrap();
+            let current_read = source.read(&mut buf_read[read..])?;
 
             // Detect end of file, write final chunk
             if current_read == 0 {
-                let (tag, to_write) = stream
-                    .decrypt(&buf_read[..read], None, &mut buf_write)
-                    .unwrap();
+                let (tag, to_write) = stream.decrypt(&buf_read[..read], None, &mut buf_write)?;
 
                 if tag != cipher_stream::MessageType::Final {
                     panic!("End of file reached before the end of the stream!");
                 }
 
-                dest.write_all(&buf_write[..to_write]).unwrap();
+                dest.write_all(&buf_write[..to_write])?;
                 break 'outer;
             }
 
             read += current_read;
         }
 
-        stream.decrypt(&buf_read, None, &mut buf_write).unwrap();
-        dest.write_all(&buf_write).unwrap();
+        stream.decrypt(&buf_read, None, &mut buf_write)?;
+        dest.write_all(&buf_write)?;
     }
 
     // Clear the output buffer, which still contains plaintext
-    alkali::mem::clear(&mut buf_write).unwrap();
+    mem::clear(&mut buf_write)?;
+
+    Ok(())
 }
 
 fn main() {
@@ -174,11 +183,11 @@ fn main() {
         .into_bytes();
 
     match args[1].as_str() {
-        "encrypt" => encrypt_file(&args[2], &args[3], &password),
-        "decrypt" => decrypt_file(&args[2], &args[3], &password),
+        "encrypt" => encrypt_file(&args[2], &args[3], &password).unwrap(),
+        "decrypt" => decrypt_file(&args[2], &args[3], &password).unwrap(),
         _ => panic!("Unrecognised mode"),
     }
 
     // Clear the password from memory
-    alkali::mem::clear(&mut password).unwrap();
+    mem::clear(&mut password).unwrap();
 }
