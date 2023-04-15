@@ -70,7 +70,7 @@ where
     // Prefix the output with the salt, so it can be used to derive the same key when decrypting
     dest.write_all(&salt)?;
 
-    let mut stream = cipher_stream::EncryptionStream::new(&key)?;
+    let stream = cipher_stream::EncryptionStream::new(&key)?;
 
     // The key is no longer required, drop it ASAP to clear it from memory (the key is allocated
     // using Sodium's secure allocator, and on drop, will be zeroed before free).
@@ -80,10 +80,24 @@ where
     let header = stream.get_header();
     dest.write_all(&header)?;
 
-    // Read the file in chunks, and encrypt
+    encrypt_stream(&mut source, &mut dest, stream)
+}
+
+/// Generic function to encrypt a stream of data in chunks, using a provided
+/// `cipher_stream::EncryptionStream`.
+fn encrypt_stream<S, D>(
+    source: &mut S,
+    dest: &mut D,
+    mut stream: cipher_stream::EncryptionStream,
+) -> Result<()>
+where
+    S: Read,
+    D: Write,
+{
     let mut buf_read = [0; CHUNK_SIZE];
     let mut buf_write = [0; CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH];
-    'outer: loop {
+
+    loop {
         let mut read = 0;
 
         while read < CHUNK_SIZE {
@@ -93,7 +107,11 @@ where
             if current_read == 0 {
                 let to_write = stream.finalise(&buf_read[..read], None, &mut buf_write)?;
                 dest.write_all(&buf_write[..to_write])?;
-                break 'outer;
+
+                // Clear the input buffer, which still contains plaintext
+                mem::clear(&mut buf_read)?;
+
+                return Ok(());
             }
 
             read += current_read;
@@ -102,11 +120,6 @@ where
         stream.encrypt(&buf_read, None, &mut buf_write)?;
         dest.write_all(&buf_write)?;
     }
-
-    // Clear the input buffer, which still contains plaintext
-    mem::clear(&mut buf_read)?;
-
-    Ok(())
 }
 
 /// Decrypts `source`, writing the result to `dest`, using `password` to derive the decryption key.
@@ -129,16 +142,31 @@ where
     let mut header = [0; cipher_stream::HEADER_LENGTH];
     source.read_exact(&mut header)?;
 
-    let mut stream = cipher_stream::DecryptionStream::new(&key, &header)?;
+    let stream = cipher_stream::DecryptionStream::new(&key, &header)?;
 
     // The key is no longer required, drop it ASAP to clear it from memory (the key is allocated
     // using Sodium's secure allocator, and on drop, will be zeroed before free).
     drop(key);
 
+    decrypt_stream(&mut source, &mut dest, stream)
+}
+
+/// Generic function to decrypt a stream of data in chunks, using a provided
+/// `cipher_stream::DecryptionStream`.
+fn decrypt_stream<S, D>(
+    source: &mut S,
+    dest: &mut D,
+    mut stream: cipher_stream::DecryptionStream,
+) -> Result<()>
+where
+    S: Read,
+    D: Write,
+{
     // Read the file in chunks, and decrypt
     let mut buf_read = [0; CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH];
     let mut buf_write = [0; CHUNK_SIZE];
-    'outer: loop {
+
+    loop {
         let mut read = 0;
 
         while read < CHUNK_SIZE + cipher_stream::OVERHEAD_LENGTH {
@@ -153,7 +181,11 @@ where
                 }
 
                 dest.write_all(&buf_write[..to_write])?;
-                break 'outer;
+
+                // Clear the output buffer, which still contains plaintext
+                mem::clear(&mut buf_write)?;
+
+                return Ok(());
             }
 
             read += current_read;
@@ -162,11 +194,6 @@ where
         stream.decrypt(&buf_read, None, &mut buf_write)?;
         dest.write_all(&buf_write)?;
     }
-
-    // Clear the output buffer, which still contains plaintext
-    mem::clear(&mut buf_write)?;
-
-    Ok(())
 }
 
 fn main() {
