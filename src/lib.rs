@@ -115,7 +115,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(doc_cfg, feature(doc_cfg))]
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
-#![cfg_attr(feature = "alloc", feature(nonnull_slice_from_raw_parts))]
 #![deny(clippy::all)]
 #![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
